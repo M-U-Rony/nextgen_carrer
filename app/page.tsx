@@ -1,8 +1,5 @@
+import LandingPage from "../ui/landingpage";
 
 export default function Home() {
-  return (
-    <div className="">
-     
-    </div>
-  );
+  return <LandingPage />;
 }
