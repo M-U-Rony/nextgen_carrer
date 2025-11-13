@@ -2,19 +2,11 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Inter } from "next/font/google";
-import {
-  Search,
-  Filter,
-  X,
-  ExternalLink,
-  BookOpen,
-  DollarSign,
-  Clock,
-  Star,
-} from "lucide-react";
-import type { IResource } from "@/models/Resource";
+import { Search, MapPin, Briefcase, Filter, X } from "lucide-react";
+import type { IJob } from "@/models/Job";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -35,52 +27,51 @@ const cardVariants = {
 const gradientBackground =
   "bg-[radial-gradient(circle_at_20%_20%,#2563EB22,transparent_55%),radial-gradient(circle_at_80%_0%,#9333EA22,transparent_60%),linear-gradient(115deg,#020617,#0f172a)]";
 
-export default function ResourcesPage() {
-  const [resources, setResources] = useState<IResource[]>([]);
+export default function JobsPage() {
+  const router = useRouter();
+  const [jobs, setJobs] = useState<IJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState({
-    platform: "all",
-    cost: "all",
-    level: "all",
-    skill: "all",
+    track: "all",
+    location: "all",
+    jobType: "all",
+    experienceLevel: "all",
   });
   const [showFilters, setShowFilters] = useState(false);
 
   // Get unique values for filter options
-  const uniquePlatforms = useMemo(() => {
-    const platforms = new Set(resources.map((resource) => resource.platform));
-    return Array.from(platforms).sort();
-  }, [resources]);
+  const uniqueTracks = useMemo(() => {
+    const tracks = new Set(jobs.map((job) => job.track));
+    return Array.from(tracks).sort();
+  }, [jobs]);
 
-  const allSkills = useMemo(() => {
-    const skillsSet = new Set<string>();
-    resources.forEach((resource) => {
-      resource.relatedSkills.forEach((skill) => skillsSet.add(skill));
-    });
-    return Array.from(skillsSet).sort();
-  }, [resources]);
+  const uniqueLocations = useMemo(() => {
+    const locations = new Set(jobs.map((job) => job.location));
+    return Array.from(locations).sort();
+  }, [jobs]);
 
   useEffect(() => {
-    fetchResources();
+    fetchJobs();
   }, [filters, searchQuery]);
 
-  const fetchResources = async () => {
+  const fetchJobs = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
-
-      if (filters.platform !== "all") params.append("platform", filters.platform);
-      if (filters.cost !== "all") params.append("cost", filters.cost);
-      if (filters.level !== "all") params.append("level", filters.level);
-      if (filters.skill !== "all") params.append("skill", filters.skill);
+      
+      if (filters.track !== "all") params.append("track", filters.track);
+      if (filters.location !== "all") params.append("location", filters.location);
+      if (filters.jobType !== "all") params.append("jobType", filters.jobType);
+      if (filters.experienceLevel !== "all")
+        params.append("experienceLevel", filters.experienceLevel);
       if (searchQuery) params.append("search", searchQuery);
 
-      const response = await fetch(`/api/resources?${params.toString()}`);
+      const response = await fetch(`/api/jobs?${params.toString()}`);
       const data = await response.json();
-      setResources(data.resources || []);
+      setJobs(data.jobs || []);
     } catch (error) {
-      console.error("Error fetching resources:", error);
+      console.error("Error fetching jobs:", error);
     } finally {
       setLoading(false);
     }
@@ -88,55 +79,29 @@ export default function ResourcesPage() {
 
   const clearFilters = () => {
     setFilters({
-      platform: "all",
-      cost: "all",
-      level: "all",
-      skill: "all",
+      track: "all",
+      location: "all",
+      jobType: "all",
+      experienceLevel: "all",
     });
     setSearchQuery("");
   };
 
   const hasActiveFilters =
-    filters.platform !== "all" ||
-    filters.cost !== "all" ||
-    filters.level !== "all" ||
-    filters.skill !== "all" ||
+    filters.track !== "all" ||
+    filters.location !== "all" ||
+    filters.jobType !== "all" ||
+    filters.experienceLevel !== "all" ||
     searchQuery !== "";
 
   return (
-    <main className={`${gradientBackground} min-h-screen text-white pb-12`}>
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/70 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link
-            href="/"
-            className={`${inter.className} text-lg font-semibold tracking-[0.3em] uppercase text-white`}
-          >
-            Nextgen_Career
-          </Link>
-          <nav className="flex items-center gap-4 text-sm sm:gap-6">
-            <Link
-              href="/dashboard"
-              className="group relative px-1 transition hover:text-blue-200"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/jobs"
-              className="group relative px-1 transition hover:text-blue-200"
-            >
-              Jobs
-            </Link>
-            <Link
-              href="/resources"
-              className="group relative px-1 text-blue-300 transition hover:text-blue-200"
-            >
-              Resources
-            </Link>
-          </nav>
-        </div>
-      </header>
-
-      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+    <motion.main
+      variants={fadeIn}
+      initial="hidden"
+      animate="visible"
+      className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10`}
+    >
+      <section className="mx-auto max-w-7xl">
         <motion.div
           variants={fadeIn}
           initial="hidden"
@@ -146,10 +111,10 @@ export default function ResourcesPage() {
           <h1
             className={`${inter.className} mb-4 text-4xl font-bold sm:text-5xl`}
           >
-            Learning Resources
+            Jobs & Opportunities
           </h1>
           <p className="text-lg text-slate-300">
-            Discover courses and tutorials to advance your skills
+            Discover your next career opportunity
           </p>
         </motion.div>
 
@@ -164,7 +129,7 @@ export default function ResourcesPage() {
             <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search resources by title, platform, or skills..."
+              placeholder="Search jobs by title, company, or skills..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-xl border border-white/10 bg-white/5 px-12 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
@@ -208,19 +173,19 @@ export default function ResourcesPage() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Platform
+                  Track
                 </label>
                 <select
-                  value={filters.platform}
+                  value={filters.track}
                   onChange={(e) =>
-                    setFilters({ ...filters, platform: e.target.value })
+                    setFilters({ ...filters, track: e.target.value })
                   }
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                 >
-                  <option value="all">All Platforms</option>
-                  {uniquePlatforms.map((platform) => (
-                    <option key={platform} value={platform}>
-                      {platform}
+                  <option value="all">All Tracks</option>
+                  {uniqueTracks.map((track) => (
+                    <option key={track} value={track}>
+                      {track}
                     </option>
                   ))}
                 </select>
@@ -228,138 +193,128 @@ export default function ResourcesPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Cost
+                  Location
                 </label>
                 <select
-                  value={filters.cost}
+                  value={filters.location}
                   onChange={(e) =>
-                    setFilters({ ...filters, cost: e.target.value })
+                    setFilters({ ...filters, location: e.target.value })
                   }
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                 >
-                  <option value="all">All Costs</option>
-                  <option value="Free">Free</option>
-                  <option value="Paid">Paid</option>
+                  <option value="all">All Locations</option>
+                  {uniqueLocations.map((location) => (
+                    <option key={location} value={location}>
+                      {location}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Level
+                  Job Type
                 </label>
                 <select
-                  value={filters.level}
+                  value={filters.jobType}
                   onChange={(e) =>
-                    setFilters({ ...filters, level: e.target.value })
+                    setFilters({ ...filters, jobType: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                >
+                  <option value="all">All Types</option>
+                  <option value="Internship">Internship</option>
+                  <option value="Part-time">Part-time</option>
+                  <option value="Full-time">Full-time</option>
+                  <option value="Freelance">Freelance</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-300">
+                  Experience
+                </label>
+                <select
+                  value={filters.experienceLevel}
+                  onChange={(e) =>
+                    setFilters({ ...filters, experienceLevel: e.target.value })
                   }
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                 >
                   <option value="all">All Levels</option>
-                  <option value="Beginner">Beginner</option>
-                  <option value="Intermediate">Intermediate</option>
-                  <option value="Advanced">Advanced</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Skill
-                </label>
-                <select
-                  value={filters.skill}
-                  onChange={(e) =>
-                    setFilters({ ...filters, skill: e.target.value })
-                  }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                >
-                  <option value="all">All Skills</option>
-                  {allSkills.map((skill) => (
-                    <option key={skill} value={skill}>
-                      {skill}
-                    </option>
-                  ))}
+                  <option value="Fresher">Fresher</option>
+                  <option value="Junior">Junior</option>
+                  <option value="Mid">Mid</option>
                 </select>
               </div>
             </div>
           </motion.div>
         )}
 
-        {/* Resources Grid */}
+        {/* Jobs List */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
           </div>
-        ) : resources.length === 0 ? (
+        ) : jobs.length === 0 ? (
           <div className="rounded-xl border border-white/10 bg-white/5 p-12 text-center">
-            <p className="text-lg text-slate-300">No resources found</p>
+            <p className="text-lg text-slate-300">No jobs found</p>
             <p className="mt-2 text-sm text-slate-400">
               Try adjusting your filters or search query
             </p>
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {resources.map((resource, index) => (
+            {jobs.map((job, index) => (
               <motion.div
-                key={resource._id}
+                key={job._id}
                 variants={cardVariants}
                 initial="hidden"
                 animate="visible"
                 custom={index}
-                className="group rounded-xl border border-white/10 bg-white/5 p-6 transition hover:border-white/20 hover:bg-white/10"
+                className="group cursor-pointer rounded-xl border border-white/10 bg-white/5 p-6 transition hover:border-white/20 hover:bg-white/10"
+                onClick={() => router.push(`/jobs/${job._id}`)}
               >
                 <div className="mb-4 flex items-start justify-between">
                   <div className="flex-1">
                     <h3
                       className={`${inter.className} mb-2 text-xl font-semibold text-white group-hover:text-blue-300`}
                     >
-                      {resource.title}
+                      {job.title}
                     </h3>
-                    <p className="text-sm text-slate-300">{resource.platform}</p>
+                    <p className="text-sm text-slate-300">{job.company}</p>
                   </div>
-                  <span
-                    className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                      resource.cost === "Free"
-                        ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
-                        : "border-amber-400/40 bg-amber-400/10 text-amber-200"
-                    }`}
-                  >
-                    {resource.cost}
+                  <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
+                    {job.jobType}
                   </span>
                 </div>
 
-                {resource.description && (
-                  <p className="mb-4 line-clamp-2 text-sm text-slate-400">
-                    {resource.description}
-                  </p>
-                )}
-
                 <div className="mb-4 flex flex-wrap gap-2 text-xs text-slate-400">
-                  {resource.level && (
-                    <div className="flex items-center gap-1">
-                      <BookOpen className="h-3 w-3" />
-                      {resource.level}
-                    </div>
-                  )}
-                  {resource.duration && (
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {resource.duration}
-                    </div>
-                  )}
-                  {resource.rating && (
-                    <div className="flex items-center gap-1">
-                      <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                      {resource.rating}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {job.location}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Briefcase className="h-3 w-3" />
+                    {job.experienceLevel}
+                  </div>
                 </div>
 
                 <div className="mb-4">
                   <p className="mb-2 text-xs font-medium text-slate-400">
-                    Related Skills
+                    Track
+                  </p>
+                  <span className="rounded-lg bg-blue-500/20 px-2 py-1 text-xs text-blue-300">
+                    {job.track}
+                  </span>
+                </div>
+
+                <div className="mb-4">
+                  <p className="mb-2 text-xs font-medium text-slate-400">
+                    Skills
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {resource.relatedSkills.slice(0, 3).map((skill) => (
+                    {job.requiredSkills.slice(0, 3).map((skill) => (
                       <span
                         key={skill}
                         className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/80"
@@ -367,25 +322,23 @@ export default function ResourcesPage() {
                         {skill}
                       </span>
                     ))}
-                    {resource.relatedSkills.length > 3 && (
+                    {job.requiredSkills.length > 3 && (
                       <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/80">
-                        +{resource.relatedSkills.length - 3}
+                        +{job.requiredSkills.length - 3}
                       </span>
                     )}
                   </div>
                 </div>
 
-                <motion.a
-                  href={resource.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-linear-to-r from-[#2563EB] to-[#9333EA] px-4 py-2 text-sm font-semibold text-white transition"
-                >
-                  Go to Course
-                  <ExternalLink className="h-4 w-4" />
-                </motion.a>
+                {job.salary && (
+                  <p className="mb-4 text-sm font-medium text-emerald-300">
+                    {job.salary}
+                  </p>
+                )}
+
+                <div className="text-sm text-blue-300 transition group-hover:text-blue-200">
+                  View Details →
+                </div>
               </motion.div>
             ))}
           </div>

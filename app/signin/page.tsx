@@ -75,7 +75,7 @@ export default function SignInPage() {
             : "Something went wrong while signing in. Please try again.",
         });
       } else if (result?.ok) {
-        reset({ ...values, password: "" });
+      reset({ ...values, password: "" });
         router.push("/dashboard");
         router.refresh();
       }

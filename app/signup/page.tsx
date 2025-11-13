@@ -112,16 +112,16 @@ export default function SignUpPage() {
         reset({
           fullName: "",
           email: "",
-          password: "",
-          confirmPassword: "",
-        });
+        password: "",
+        confirmPassword: "",
+      });
         router.push("/dashboard");
         router.refresh();
       } else {
-        setFormStatus({
-          type: "success",
+      setFormStatus({
+        type: "success",
           message: "Account created! Please sign in.",
-        });
+      });
       }
     } catch (error) {
       console.error(error);

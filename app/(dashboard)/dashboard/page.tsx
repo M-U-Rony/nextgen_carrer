@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Inter } from "next/font/google";
@@ -10,6 +10,7 @@ import { useMemo, useState, useEffect, type FC } from "react";
 import { ExternalLink } from "lucide-react";
 import type { IJob } from "@/models/Job";
 import type { IResource } from "@/models/Resource";
+import type { IUser } from "@/models/User";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -73,8 +74,26 @@ const DashboardPage: FC = () => {
   >([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [loadingResources, setLoadingResources] = useState(true);
+  const [userData, setUserData] = useState<IUser | null>(null);
 
   const user = useMemo(() => {
+    if (userData) {
+      return {
+        name: userData.name || session?.user?.name || "User",
+        email: userData.email || session?.user?.email || "",
+        image:
+          userData.image ||
+          session?.user?.image ||
+          "https://i.pravatar.cc/120?img=5",
+        skills: userData.skills || defaultUserData.skills,
+        preferredTrack:
+          userData.preferredTrack || defaultUserData.preferredTrack,
+        education: userData.education || defaultUserData.education,
+        experienceLevel:
+          userData.experienceLevel || defaultUserData.experienceLevel,
+        profileCompletion: calculateProfileCompletion(userData),
+      };
+    }
     if (session?.user) {
       return {
         name: session.user.name || "User",
@@ -89,20 +108,47 @@ const DashboardPage: FC = () => {
       image: "https://i.pravatar.cc/120?img=5",
       ...defaultUserData,
     };
-  }, [session]);
+  }, [session, userData]);
+
+  const calculateProfileCompletion = (user: IUser | null): number => {
+    if (!user) return 0;
+    let completed = 0;
+    const total = 5; // name, email, skills, preferredTrack, experienceLevel
+
+    if (user.name) completed++;
+    if (user.email) completed++;
+    if (user.skills && user.skills.length > 0) completed++;
+    if (user.preferredTrack) completed++;
+    if (user.experienceLevel) completed++;
+
+    return Math.round((completed / total) * 100);
+  };
 
   const skillsColumns = useMemo(() => {
     const midpoint = Math.ceil(user.skills.length / 2);
     return [user.skills.slice(0, midpoint), user.skills.slice(midpoint)];
   }, [user.skills]);
 
-  // Fetch recommended jobs
+  // Fetch user profile and recommendations
   useEffect(() => {
     if (session) {
+      fetchUserProfile();
       fetchRecommendedJobs();
       fetchRecommendedResources();
     }
   }, [session]);
+
+  const fetchUserProfile = async () => {
+    try {
+      const response = await fetch("/api/user/profile");
+      const data = await response.json();
+      if (response.ok && data.user) {
+        setUserData(data.user);
+      }
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+    }
+  };
 
   const fetchRecommendedJobs = async () => {
     try {
@@ -134,11 +180,6 @@ const DashboardPage: FC = () => {
     }
   };
 
-  const handleLogout = async () => {
-    await signOut({ redirect: false });
-    router.push("/");
-    router.refresh();
-  };
 
   if (status === "loading") {
     return (
@@ -157,57 +198,13 @@ const DashboardPage: FC = () => {
   }
 
   return (
-    <motion.main
+    <motion.div
       variants={pageFade}
       initial="hidden"
       animate="visible"
-      className={`${gradientBackground} min-h-screen text-white`}
+      className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10`}
     >
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/70 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link
-            href="/"
-            className={`${inter.className} text-lg font-semibold tracking-[0.3em] uppercase text-white`}
-          >
-            Nextgen_Career
-          </Link>
-          <nav className="flex items-center gap-4 text-sm sm:gap-6">
-            {["Dashboard", "Jobs", "Resources", "Profile"].map((item) => (
-              <Link
-                key={item}
-                href={
-                  item === "Dashboard"
-                    ? "/dashboard"
-                    : item === "Jobs"
-                    ? "/jobs"
-                    : item === "Resources"
-                    ? "/resources"
-                    : "#"
-                }
-                className="group relative px-1"
-              >
-                <span className="transition group-hover:text-blue-200">
-                  {item}
-                </span>
-                <span className="pointer-events-none absolute inset-x-0 bottom-[-6px] h-0.5 origin-center scale-x-0 rounded-full bg-linear-to-r from-[#2563EB] to-[#9333EA] transition-transform duration-300 group-hover:scale-x-100" />
-              </Link>
-            ))}
-            <motion.button
-              onClick={handleLogout}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="group relative px-1 text-sm"
-            >
-              <span className="transition group-hover:text-red-300">
-                Logout
-              </span>
-              <span className="pointer-events-none absolute inset-x-0 bottom-[-6px] h-0.5 origin-center scale-x-0 rounded-full bg-linear-to-r from-red-500 to-red-600 transition-transform duration-300 group-hover:scale-x-100" />
-            </motion.button>
-          </nav>
-        </div>
-      </header>
-
-      <section className="mx-auto flex max-w-6xl flex-col gap-10 px-4 py-10 sm:px-6 sm:py-12 lg:py-14">
+      <section className="mx-auto flex max-w-6xl flex-col gap-10">
         <motion.div
           variants={cardVariants}
           initial="hidden"
@@ -236,13 +233,15 @@ const DashboardPage: FC = () => {
                   <p className="text-sm text-slate-300">{user.email}</p>
                 </div>
               </div>
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                className="inline-flex items-center justify-center rounded-xl bg-linear-to-r from-[#2563EB] to-[#9333EA] px-4 py-2 text-sm font-semibold shadow-lg shadow-blue-900/40 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400"
-              >
-                Edit Profile
-              </motion.button>
+              <Link href="/profile">
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="inline-flex items-center justify-center rounded-xl bg-linear-to-r from-[#2563EB] to-[#9333EA] px-4 py-2 text-sm font-semibold shadow-lg shadow-blue-900/40 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400"
+                >
+                  Edit Profile
+                </motion.button>
+              </Link>
             </div>
 
             <div className="mt-6 grid gap-4 text-sm text-slate-200 md:grid-cols-2">
@@ -250,19 +249,19 @@ const DashboardPage: FC = () => {
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Education
                 </p>
-                <p className="mt-1">{user.education}</p>
+                <p className="mt-1">{user.education || "Not set"}</p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Experience Level
                 </p>
-                <p className="mt-1">{user.experienceLevel}</p>
+                <p className="mt-1">{user.experienceLevel || "Not set"}</p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Preferred Track
                 </p>
-                <p className="mt-1">{user.preferredTrack}</p>
+                <p className="mt-1">{user.preferredTrack || "Not set"}</p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
@@ -288,13 +287,15 @@ const DashboardPage: FC = () => {
               >
                 Your Skills
               </h3>
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-white/90 transition hover:border-white/30"
-              >
-                + Add Skill
-              </motion.button>
+              <Link href="/profile">
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-white/90 transition hover:border-white/30"
+                >
+                  Edit Profile
+                </motion.button>
+              </Link>
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -303,7 +304,7 @@ const DashboardPage: FC = () => {
                   key={`column-${columnIndex}`}
                   className="flex flex-wrap gap-2"
                 >
-                  {column.map((skill) => (
+                  {column.map((skill: string) => (
                     <span
                       key={skill}
                       className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/90"
@@ -607,24 +608,7 @@ const DashboardPage: FC = () => {
           </div>
         </motion.section>
       </section>
-
-      <footer className="border-t border-white/10 bg-slate-950/70 py-6 text-sm text-slate-400 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 sm:flex-row sm:px-6">
-          <p>© 2025 Nextgen_Career. All rights reserved.</p>
-          <div className="flex flex-wrap items-center gap-4">
-            <Link href="#" className="transition hover:text-white">
-              About
-            </Link>
-            <Link href="#" className="transition hover:text-white">
-              Contact
-            </Link>
-            <Link href="#" className="transition hover:text-white">
-              Privacy Policy
-            </Link>
-          </div>
-        </div>
-      </footer>
-    </motion.main>
+    </motion.div>
   );
 };
 

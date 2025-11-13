@@ -58,21 +58,19 @@ export default function JobDetailsPage() {
 
   if (loading) {
     return (
-      <main className={`${gradientBackground} min-h-screen text-white`}>
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="text-center">
-            <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
-            <p>Loading job details...</p>
-          </div>
+      <div className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10 flex items-center justify-center`}>
+        <div className="text-center">
+          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
+          <p>Loading job details...</p>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (!job) {
     return (
-      <main className={`${gradientBackground} min-h-screen text-white`}>
-        <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
+      <div className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10`}>
+        <div className="mx-auto max-w-4xl">
           <div className="rounded-xl border border-white/10 bg-white/5 p-12 text-center">
             <p className="mb-4 text-lg text-slate-300">Job not found</p>
             <Link
@@ -84,38 +82,18 @@ export default function JobDetailsPage() {
             </Link>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className={`${gradientBackground} min-h-screen text-white`}>
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/70 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link
-            href="/"
-            className={`${inter.className} text-lg font-semibold tracking-[0.3em] uppercase text-white`}
-          >
-            Nextgen_Career
-          </Link>
-          <nav className="flex items-center gap-4 text-sm sm:gap-6">
-            <Link
-              href="/dashboard"
-              className="group relative px-1 transition hover:text-blue-200"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/jobs"
-              className="group relative px-1 text-blue-300 transition hover:text-blue-200"
-            >
-              Jobs
-            </Link>
-          </nav>
-        </div>
-      </header>
-
-      <section className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+    <motion.main
+      variants={fadeIn}
+      initial="hidden"
+      animate="visible"
+      className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10`}
+    >
+      <section className="mx-auto max-w-4xl">
         <motion.button
           variants={fadeIn}
           initial="hidden"
