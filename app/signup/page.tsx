@@ -7,8 +7,6 @@ import { signIn } from "next-auth/react";
 import { motion } from "framer-motion";
 import { Inter } from "next/font/google";
 import { useForm, type SubmitHandler, type FieldErrors } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -22,36 +20,12 @@ const fadeIn = {
 const backgroundGradient =
   "bg-[radial-gradient(circle_at_15%_25%,#2563eb55,transparent_55%),radial-gradient(circle_at_85%_20%,#9333ea55,transparent_60%),linear-gradient(140deg,#030712,#0f172a)]";
 
-const signUpSchema = z
-  .object({
-    fullName: z.string().min(2, "Enter your full name"),
-    email: z.string().email("Enter a valid email address"),
-    password: z
-      .string()
-      .min(8, "Password must be at least 8 characters")
-      .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-      .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-      .regex(
-        /[^a-zA-Z0-9]/,
-        "Password must contain at least one special character"
-      ),
-    confirmPassword: z.string().min(8, "Confirm your password"),
-    userType: z.union([z.literal("job_seeker"), z.literal("employer")]),
-  })
-  .refine((values) => values.password === values.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  })
-  .refine(
-    (values) =>
-      values.userType === "job_seeker" || values.userType === "employer",
-    {
-      message: "Please select an account type",
-      path: ["userType"],
-    }
-  );
-
-type SignUpValues = z.infer<typeof signUpSchema>;
+type SignUpValues = {
+  fullName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+};
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -63,9 +37,6 @@ export default function SignUpPage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
-  const [selectedUserType, setSelectedUserType] = useState<
-    "job_seeker" | "employer"
-  >("job_seeker");
   const submitAttemptedRef = useRef(false);
 
   const {
@@ -74,29 +45,28 @@ export default function SignUpPage() {
     formState: { errors, isSubmitting },
     reset,
     watch,
-    setValue,
     trigger,
   } = useForm<SignUpValues>({
-    resolver: zodResolver(signUpSchema),
     defaultValues: {
       fullName: "",
       email: "",
       password: "",
       confirmPassword: "",
-      userType: "job_seeker" as "job_seeker" | "employer",
     },
-    mode: "onSubmit",
+    mode: "onChange",
     reValidateMode: "onChange",
     shouldFocusError: false, // Prevent auto-focus which can cause issues
   });
 
-  // Sync selectedUserType with form value
-  const watchedUserType = watch("userType");
+  const watchedPassword = watch("password");
+  const watchedConfirmPassword = watch("confirmPassword");
+
+  // Trigger confirmPassword validation when password changes
   useEffect(() => {
-    if (watchedUserType && watchedUserType !== selectedUserType) {
-      setSelectedUserType(watchedUserType);
+    if (watchedConfirmPassword) {
+      trigger("confirmPassword");
     }
-  }, [watchedUserType, selectedUserType]);
+  }, [watchedPassword, watchedConfirmPassword, trigger]);
 
   // Show toast when validation errors appear after submit attempt
   useEffect(() => {
@@ -104,7 +74,6 @@ export default function SignUpPage() {
       const errorMessages = [
         errors.fullName?.message,
         errors.email?.message,
-        errors.userType?.message,
         errors.password?.message,
         errors.confirmPassword?.message,
       ].filter(Boolean) as string[];
@@ -145,7 +114,6 @@ export default function SignUpPage() {
           name: values.fullName,
           email: values.email,
           password: values.password,
-          userType: values.userType,
         }),
       });
 
@@ -182,8 +150,10 @@ export default function SignUpPage() {
           password: "",
           confirmPassword: "",
         });
-        router.push("/dashboard");
-        router.refresh();
+        // Use window.location for a full page reload to ensure session is properly loaded
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 500);
       } else {
         toast.success("Account created! Please sign in.");
         setFormStatus({
@@ -204,23 +174,6 @@ export default function SignUpPage() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setFormStatus(null);
-    try {
-      // For OAuth providers, signIn redirects automatically
-      await signIn("google", {
-        callbackUrl: "/dashboard",
-        redirect: true,
-      });
-    } catch (error) {
-      console.error("Google sign-in error:", error);
-      setFormStatus({
-        type: "error",
-        message:
-          "Failed to sign in with Google. Please check your credentials and try again.",
-      });
-    }
-  };
 
   const onInvalid = (errors: FieldErrors<SignUpValues>) => {
     submitAttemptedRef.current = true;
@@ -229,7 +182,6 @@ export default function SignUpPage() {
     const errorMessages = [
       errors.fullName?.message,
       errors.email?.message,
-      errors.userType?.message,
       errors.password?.message,
       errors.confirmPassword?.message,
     ].filter(Boolean) as string[];
@@ -275,7 +227,7 @@ export default function SignUpPage() {
         variants={fadeIn}
         initial="hidden"
         animate="visible"
-        className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/70 p-8 shadow-xl backdrop-blur-xl sm:p-10"
+        className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/70 p-6 shadow-xl backdrop-blur-xl sm:p-8 md:p-10"
       >
         {formStatus && (
           <motion.div
@@ -298,9 +250,9 @@ export default function SignUpPage() {
           className="mb-8 text-center"
         >
           <h1
-            className={`${inter.className} mt-6 text-2xl font-semibold sm:text-3xl`}
+            className={`${inter.className} mt-4 text-2xl font-semibold sm:text-3xl`}
           >
-            Join Nextgen_Career
+            Join NextGen Carrer
           </h1>
           <p className="mt-3 text-sm text-slate-300">
             Create your profile and start building your future
@@ -326,7 +278,13 @@ export default function SignUpPage() {
             <input
               id="fullName"
               type="text"
-              {...register("fullName")}
+              {...register("fullName", {
+                required: "Enter your full name",
+                minLength: {
+                  value: 2,
+                  message: "Enter your full name",
+                },
+              })}
               onFocus={() => formStatus && setFormStatus(null)}
               className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white shadow-inner transition focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-2 focus:ring-offset-slate-900"
               placeholder="Alex Johnson"
@@ -353,7 +311,13 @@ export default function SignUpPage() {
             <input
               id="email"
               type="email"
-              {...register("email")}
+              {...register("email", {
+                required: "Enter a valid email address",
+                pattern: {
+                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                  message: "Enter a valid email address",
+                },
+              })}
               onFocus={() => formStatus && setFormStatus(null)}
               className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white shadow-inner transition focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-2 focus:ring-offset-slate-900"
               placeholder="you@example.com"
@@ -362,59 +326,6 @@ export default function SignUpPage() {
             {errors.email && (
               <p className="mt-2 text-xs text-rose-200" role="alert">
                 {errors.email.message}
-              </p>
-            )}
-          </motion.div>
-
-          {/* User Type Selection */}
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.45 }}
-          >
-            <label className="block text-sm font-medium text-slate-200 mb-3">
-              I am a...
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <motion.button
-                type="button"
-                onClick={() => {
-                  setSelectedUserType("job_seeker");
-                  setValue("userType", "job_seeker");
-                }}
-                className={`relative rounded-xl border-2 p-4 text-sm font-medium transition-all ${
-                  selectedUserType === "job_seeker"
-                    ? "border-blue-500 bg-blue-500/20 text-white shadow-lg shadow-blue-500/20"
-                    : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
-                }`}
-              >
-                <div className="text-2xl mb-2">👤</div>
-                <div>Job Seeker</div>
-                <div className="text-xs mt-1 opacity-70">
-                  Looking for opportunities
-                </div>
-              </motion.button>
-              <motion.button
-                type="button"
-                onClick={() => {
-                  setSelectedUserType("employer");
-                  setValue("userType", "employer");
-                }}
-                className={`relative rounded-xl border-2 p-4 text-sm font-medium transition-all ${
-                  selectedUserType === "employer"
-                    ? "border-blue-500 bg-blue-500/20 text-white shadow-lg shadow-blue-500/20"
-                    : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
-                }`}
-              >
-                <div className="text-2xl mb-2">🏢</div>
-                <div>Employer</div>
-                <div className="text-xs mt-1 opacity-70">Hiring talent</div>
-              </motion.button>
-            </div>
-            <input type="hidden" {...register("userType")} />
-            {errors.userType && (
-              <p className="mt-2 text-xs text-rose-200" role="alert">
-                {errors.userType.message}
               </p>
             )}
           </motion.div>
@@ -438,7 +349,29 @@ export default function SignUpPage() {
               <input
                 id="password"
                 type={showPassword ? "text" : "password"}
-                {...register("password")}
+                {...register("password", {
+                  required: "Password is required",
+                  minLength: {
+                    value: 8,
+                    message: "Password must be at least 8 characters",
+                  },
+                  validate: {
+                    hasLowercase: (value) =>
+                      /[a-z]/.test(value) ||
+                      "Password must contain at least one lowercase letter",
+                    hasUppercase: (value) =>
+                      /[A-Z]/.test(value) ||
+                      "Password must contain at least one uppercase letter",
+                    hasSpecial: (value) =>
+                      /[^a-zA-Z0-9]/.test(value) ||
+                      "Password must contain at least one special character",
+                  },
+                  onChange: () => {
+                    if (watchedConfirmPassword) {
+                      trigger("confirmPassword");
+                    }
+                  },
+                })}
                 ref={(e) => {
                   register("password").ref(e);
                   passwordInputRef.current = e;
@@ -489,7 +422,16 @@ export default function SignUpPage() {
               <input
                 id="confirmPassword"
                 type={showConfirmPassword ? "text" : "password"}
-                {...register("confirmPassword")}
+                {...register("confirmPassword", {
+                  required: "Confirm your password",
+                  minLength: {
+                    value: 8,
+                    message: "Confirm your password",
+                  },
+                  validate: (value) =>
+                    value === watchedPassword || "Passwords do not match",
+                  onChange: () => trigger("confirmPassword"),
+                })}
                 ref={(e) => {
                   register("confirmPassword").ref(e);
                   confirmPasswordInputRef.current = e;
@@ -542,47 +484,6 @@ export default function SignUpPage() {
             {isSubmitting ? "Creating Account..." : "Create Account"}
           </motion.button>
         </form>
-
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-white/10"></div>
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-slate-900/70 px-2 text-slate-400">
-              Or continue with
-            </span>
-          </div>
-        </div>
-
-        <motion.button
-          type="button"
-          onClick={handleGoogleSignIn}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
-        >
-          <div className="flex items-center justify-center gap-3">
-            <svg className="h-5 w-5" viewBox="0 0 24 24">
-              <path
-                fill="currentColor"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="currentColor"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
-            Sign up with Google
-          </div>
-        </motion.button>
 
         <p className="mt-8 text-center text-sm text-slate-300">
           Already have an account?{" "}

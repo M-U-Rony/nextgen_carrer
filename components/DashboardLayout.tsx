@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -18,6 +17,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Inter } from "next/font/google";
 import { useUserType } from "@/hooks/useUserType";
+import { useAuth } from "@/hooks/useAuth";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -27,7 +27,7 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { user, logout } = useAuth();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -48,9 +48,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       ];
 
   const handleLogout = async () => {
-    await signOut({ redirect: false });
-    router.push("/");
-    router.refresh();
+    await logout();
   };
 
   const isActive = (href: string) => {
@@ -91,7 +89,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <h1
               className={`${inter.className} text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent`}
             >
-              Nextgen_Career
+              NextGen Carrer
             </h1>
           </Link>
         </div>
@@ -122,13 +120,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* User Info & Logout */}
         <div className="p-4 border-t border-white/10 space-y-3">
-          {session?.user && (
+          {user && (
             <div className="px-4 py-2 rounded-lg bg-white/5">
               <p className="text-sm font-medium text-white truncate">
-                {session.user.name || "User"}
+                {user.name || "User"}
               </p>
               <p className="text-xs text-slate-400 truncate">
-                {session.user.email}
+                {user.email}
               </p>
             </div>
           )}
@@ -151,7 +149,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <h1
                 className={`${inter.className} text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent`}
               >
-                Nextgen_Career
+                NextGen Carrer
               </h1>
             </Link>
             <button

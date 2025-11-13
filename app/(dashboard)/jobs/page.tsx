@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { Inter } from "next/font/google";
 import {
@@ -19,6 +18,8 @@ import {
 import type { IJob } from "@/models/Job";
 import type { IUser } from "@/models/User";
 import { useUserType } from "@/hooks/useUserType";
+import { useAuth } from "@/hooks/useAuth";
+import { getToken } from "@/lib/api-client";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -41,14 +42,13 @@ const gradientBackground =
 
 export default function JobsPage() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { isAuthenticated, isLoading } = useAuth();
   const [jobs, setJobs] = useState<IJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState<IUser | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState({
     track: "all",
-    location: "all",
     jobType: "all",
     experienceLevel: "all",
   });
@@ -63,16 +63,15 @@ export default function JobsPage() {
     return Array.from(tracks).sort();
   }, [jobs]);
 
-  const uniqueLocations = useMemo(() => {
-    const locations = new Set(jobs.map((job) => job.location));
-    return Array.from(locations).sort();
-  }, [jobs]);
-
   useEffect(() => {
-    if (session) {
+    if (!isLoading && !isAuthenticated) {
+      router.push("/signin");
+      return;
+    }
+    if (isAuthenticated) {
       fetchUserProfile();
     }
-  }, [session]);
+  }, [isAuthenticated, isLoading, router]);
 
   useEffect(() => {
     fetchJobs();
@@ -81,7 +80,12 @@ export default function JobsPage() {
 
   const fetchUserProfile = async () => {
     try {
-      const response = await fetch("/api/user/profile");
+      const token = getToken();
+      const response = await fetch("/api/user/profile", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const data = await response.json();
       if (response.ok && data.user) {
         setUserData(data.user);
@@ -95,9 +99,14 @@ export default function JobsPage() {
     try {
       setLoading(true);
 
+      const token = getToken();
       // If employer, fetch their own jobs
       if (userType === "employer") {
-        const response = await fetch("/api/jobs/my-jobs");
+        const response = await fetch("/api/jobs/my-jobs", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
         const data = await response.json();
         if (response.ok) {
           setJobs(data.jobs || []);
@@ -107,8 +116,6 @@ export default function JobsPage() {
         const params = new URLSearchParams();
 
         if (filters.track !== "all") params.append("track", filters.track);
-        if (filters.location !== "all")
-          params.append("location", filters.location);
         if (filters.jobType !== "all")
           params.append("jobType", filters.jobType);
         if (filters.experienceLevel !== "all")
@@ -133,8 +140,12 @@ export default function JobsPage() {
 
     try {
       setDeletingJobId(jobId);
+      const token = getToken();
       const response = await fetch(`/api/jobs/${jobId}`, {
         method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (response.ok) {
@@ -154,7 +165,6 @@ export default function JobsPage() {
   const clearFilters = () => {
     setFilters({
       track: "all",
-      location: "all",
       jobType: "all",
       experienceLevel: "all",
     });
@@ -163,7 +173,6 @@ export default function JobsPage() {
 
   const hasActiveFilters =
     filters.track !== "all" ||
-    filters.location !== "all" ||
     filters.jobType !== "all" ||
     filters.experienceLevel !== "all" ||
     searchQuery !== "";
@@ -182,16 +191,16 @@ export default function JobsPage() {
           animate="visible"
           className="mb-8"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1
-                className={`${inter.className} mb-4 text-4xl font-bold sm:text-5xl`}
+                className={`${inter.className} mb-2 sm:mb-4 text-3xl font-bold sm:text-4xl md:text-5xl`}
               >
                 {userType === "employer"
                   ? "My Job Postings"
                   : "Jobs & Opportunities"}
               </h1>
-              <p className="text-lg text-slate-300">
+              <p className="text-base sm:text-lg text-slate-300">
                 {userType === "employer"
                   ? "Manage your job postings"
                   : "Discover your next career opportunity"}
@@ -268,7 +277,7 @@ export default function JobsPage() {
                 exit={{ opacity: 0, height: 0 }}
                 className="mb-8 rounded-xl border border-white/10 bg-white/5 p-6"
               >
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   <div>
                     <label className="mb-2 block text-sm font-medium text-slate-300">
                       Track
@@ -278,32 +287,12 @@ export default function JobsPage() {
                       onChange={(e) =>
                         setFilters({ ...filters, track: e.target.value })
                       }
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
                     >
                       <option value="all">All Tracks</option>
                       {uniqueTracks.map((track) => (
                         <option key={track} value={track}>
                           {track}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-300">
-                      Location
-                    </label>
-                    <select
-                      value={filters.location}
-                      onChange={(e) =>
-                        setFilters({ ...filters, location: e.target.value })
-                      }
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                    >
-                      <option value="all">All Locations</option>
-                      {uniqueLocations.map((location) => (
-                        <option key={location} value={location}>
-                          {location}
                         </option>
                       ))}
                     </select>
@@ -318,7 +307,7 @@ export default function JobsPage() {
                       onChange={(e) =>
                         setFilters({ ...filters, jobType: e.target.value })
                       }
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
                     >
                       <option value="all">All Types</option>
                       <option value="Internship">Internship</option>
@@ -340,7 +329,7 @@ export default function JobsPage() {
                           experienceLevel: e.target.value,
                         })
                       }
-                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
                     >
                       <option value="all">All Levels</option>
                       <option value="Fresher">Fresher</option>
@@ -381,7 +370,7 @@ export default function JobsPage() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             {jobs.map((job, index) => (
               <motion.div
                 key={job._id}
@@ -436,7 +425,7 @@ export default function JobsPage() {
                   <p className="mb-2 text-xs font-medium text-slate-400">
                     Skills
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
                     {job.requiredSkills.slice(0, 3).map((skill) => (
                       <span
                         key={skill}

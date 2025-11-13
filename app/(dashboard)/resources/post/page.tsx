@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Inter } from "next/font/google";
 import { Save, ArrowLeft, X, Plus } from "lucide-react";
-import type { IUser } from "@/models/User";
 import { useAuth } from "@/hooks/useAuth";
 import { getToken } from "@/lib/api-client";
 
@@ -20,24 +19,20 @@ const fadeIn = {
 const gradientBackground =
   "bg-[radial-gradient(circle_at_20%_20%,#2563EB22,transparent_55%),radial-gradient(circle_at_80%_0%,#9333EA22,transparent_60%),linear-gradient(115deg,#020617,#0f172a)]";
 
-// Available tracks
-const availableTracks = [
-  "Web Development",
-  "Mobile Development",
-  "Data Science",
-  "Design",
-  "DevOps",
-  "Quality Assurance",
-  "Content",
-  "Marketing",
-  "Business",
+// Available platforms
+const availablePlatforms = [
+  "Udemy",
+  "YouTube",
+  "freeCodeCamp",
+  "Coursera",
+  "edX",
+  "Pluralsight",
+  "Frontend Masters",
+  "Codecademy",
+  "Khan Academy",
+  "LinkedIn Learning",
+  "Other",
 ];
-
-// Experience levels
-const experienceLevels = ["Fresher", "Junior", "Mid"];
-
-// Job types
-const jobTypes = ["Internship", "Part-time", "Full-time", "Freelance"];
 
 // Available skills
 const availableSkills = [
@@ -68,10 +63,12 @@ const availableSkills = [
   "Project Management",
 ];
 
-export default function PostJobPage() {
+// Resource levels
+const resourceLevels = ["Beginner", "Intermediate", "Advanced"];
+
+export default function PostResourcePage() {
   const router = useRouter();
-  const { user: authUser, isAuthenticated, isLoading } = useAuth();
-  const [user, setUser] = useState<IUser | null>(null);
+  const { isAuthenticated, isLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -79,15 +76,14 @@ export default function PostJobPage() {
 
   // Form state
   const [title, setTitle] = useState("");
-  const [company, setCompany] = useState("");
-  const [location, setLocation] = useState("");
+  const [platform, setPlatform] = useState("");
+  const [url, setUrl] = useState("");
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [experienceLevel, setExperienceLevel] = useState("");
-  const [jobType, setJobType] = useState("");
-  const [track, setTrack] = useState("");
+  const [cost, setCost] = useState<"Free" | "Paid">("Free");
   const [description, setDescription] = useState("");
-  const [salary, setSalary] = useState("");
-  const [applicationLink, setApplicationLink] = useState("");
+  const [duration, setDuration] = useState("");
+  const [level, setLevel] = useState("");
+  const [rating, setRating] = useState("");
   const [customSkill, setCustomSkill] = useState("");
 
   useEffect(() => {
@@ -98,38 +94,8 @@ export default function PostJobPage() {
       return;
     }
 
-    // Check if user is employer
-    fetchUserProfile();
+    setLoading(false);
   }, [isAuthenticated, isLoading, router]);
-
-  const fetchUserProfile = async () => {
-    try {
-      setLoading(true);
-      const token = getToken();
-      const response = await fetch("/api/user/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await response.json();
-
-      if (response.ok && data.user) {
-        setUser(data.user);
-        if (data.user.userType !== "employer") {
-          router.push("/dashboard");
-          return;
-        }
-        // Pre-fill company name from profile
-        if (data.user.companyName) {
-          setCompany(data.user.companyName);
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching user profile:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const toggleSkill = (skill: string) => {
     setSelectedSkills((prev) =>
@@ -154,7 +120,7 @@ export default function PostJobPage() {
 
     try {
       const token = getToken();
-      const response = await fetch("/api/jobs", {
+      const response = await fetch("/api/resources", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -162,31 +128,30 @@ export default function PostJobPage() {
         },
         body: JSON.stringify({
           title,
-          company,
-          location,
-          requiredSkills: selectedSkills,
-          experienceLevel,
-          jobType,
-          track,
-          description,
-          salary: salary || undefined,
-          applicationLink: applicationLink || undefined,
+          platform,
+          url,
+          relatedSkills: selectedSkills,
+          cost,
+          description: description || undefined,
+          duration: duration || undefined,
+          level: level || undefined,
+          rating: rating ? Number(rating) : undefined,
         }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        setSuccessMessage("Job posted successfully!");
+        setSuccessMessage("Resource posted successfully!");
         setTimeout(() => {
-          router.push("/jobs");
+          router.push("/resources");
         }, 2000);
       } else {
-        setErrorMessage(data.error || "Failed to post job");
+        setErrorMessage(data.error || "Failed to post resource");
       }
     } catch (error) {
-      console.error("Error posting job:", error);
-      setErrorMessage("Failed to post job. Please try again.");
+      console.error("Error posting resource:", error);
+      setErrorMessage("Failed to post resource. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -194,7 +159,9 @@ export default function PostJobPage() {
 
   if (isLoading || loading) {
     return (
-      <div className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10 flex items-center justify-center`}>
+      <div
+        className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10 flex items-center justify-center`}
+      >
         <div className="text-center">
           <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
           <p>Loading...</p>
@@ -203,7 +170,7 @@ export default function PostJobPage() {
     );
   }
 
-  if (!isAuthenticated || user?.userType !== "employer") {
+  if (!isAuthenticated) {
     return null;
   }
 
@@ -222,17 +189,20 @@ export default function PostJobPage() {
           className="mb-8"
         >
           <Link
-            href="/dashboard"
+            href="/resources"
             className="mb-6 inline-flex items-center gap-2 text-slate-300 transition hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
+            Back to Resources
           </Link>
-          <h1 className={`${inter.className} mb-4 text-3xl font-bold sm:text-4xl md:text-5xl`}>
-            Post a New Job
+          <h1
+            className={`${inter.className} mb-4 text-3xl font-bold sm:text-4xl md:text-5xl`}
+          >
+            Post a Learning Resource
           </h1>
           <p className="text-lg text-slate-300">
-            Create a job posting to attract the best talent for your company
+            Share a helpful course, tutorial, or learning material with the
+            community
           </p>
         </motion.div>
 
@@ -263,138 +233,76 @@ export default function PostJobPage() {
           onSubmit={handleSubmit}
           className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 backdrop-blur"
         >
-          {/* Job Title */}
+          {/* Title */}
           <div className="mb-8">
             <label
               className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
             >
-              Job Title *
+              Resource Title *
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Frontend Developer"
+              placeholder="e.g., Complete React Developer Course"
               required
               className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
             />
           </div>
 
-          {/* Company Name */}
+          {/* Platform */}
           <div className="mb-8">
             <label
               className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
             >
-              Company Name *
+              Platform *
+            </label>
+            <select
+              value={platform}
+              onChange={(e) => setPlatform(e.target.value)}
+              required
+              className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
+            >
+              <option value="" className="bg-slate-900 text-slate-400">
+                Select a platform...
+              </option>
+              {availablePlatforms.map((p) => (
+                <option key={p} value={p} className="bg-slate-900 text-white">
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* URL */}
+          <div className="mb-8">
+            <label
+              className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
+            >
+              Resource URL *
             </label>
             <input
-              type="text"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder="e.g., TechNova Labs"
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://example.com/course"
               required
               className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
             />
+            <p className="mt-2 text-sm text-slate-400">
+              The direct link to the learning resource
+            </p>
           </div>
 
-          {/* Location */}
+          {/* Related Skills */}
           <div className="mb-8">
             <label
               className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
             >
-              Location *
-            </label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g., Remote, New York, NY"
-              required
-              className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-            />
-          </div>
-
-          {/* Track */}
-          <div className="mb-8">
-            <label
-              className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
-            >
-              Career Track *
-            </label>
-            <select
-              value={track}
-              onChange={(e) => setTrack(e.target.value)}
-              required
-              className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
-            >
-              <option value="" className="bg-slate-900 text-slate-400">
-                Select a track...
-              </option>
-              {availableTracks.map((t) => (
-                <option key={t} value={t} className="bg-slate-900 text-white">
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Experience Level */}
-          <div className="mb-8">
-            <label
-              className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
-            >
-              Experience Level *
-            </label>
-            <select
-              value={experienceLevel}
-              onChange={(e) => setExperienceLevel(e.target.value)}
-              required
-              className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
-            >
-              <option value="" className="bg-slate-900 text-slate-400">
-                Select experience level...
-              </option>
-              {experienceLevels.map((level) => (
-                <option key={level} value={level} className="bg-slate-900 text-white">
-                  {level}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Job Type */}
-          <div className="mb-8">
-            <label
-              className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
-            >
-              Job Type *
-            </label>
-            <select
-              value={jobType}
-              onChange={(e) => setJobType(e.target.value)}
-              required
-              className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
-            >
-              <option value="" className="bg-slate-900 text-slate-400">
-                Select job type...
-              </option>
-              {jobTypes.map((type) => (
-                <option key={type} value={type} className="bg-slate-900 text-white">
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Required Skills */}
-          <div className="mb-8">
-            <label
-              className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
-            >
-              Required Skills * ({selectedSkills.length} selected)
+              Related Skills * ({selectedSkills.length} selected)
             </label>
             <p className="mb-4 text-sm text-slate-400">
-              Select skills required for this position
+              Select skills that this resource teaches or relates to
             </p>
             <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3 md:grid-cols-4 mb-4">
               {availableSkills.map((skill) => {
@@ -449,62 +357,126 @@ export default function PostJobPage() {
             </div>
           </div>
 
+          {/* Cost */}
+          <div className="mb-8">
+            <label
+              className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
+            >
+              Cost *
+            </label>
+            <div className="flex gap-4">
+              <motion.button
+                type="button"
+                onClick={() => setCost("Free")}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`flex-1 rounded-xl border-2 p-4 text-center transition ${
+                  cost === "Free"
+                    ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-200"
+                    : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
+                }`}
+              >
+                <div className="text-2xl mb-2">🆓</div>
+                <div className="font-semibold">Free</div>
+              </motion.button>
+              <motion.button
+                type="button"
+                onClick={() => setCost("Paid")}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`flex-1 rounded-xl border-2 p-4 text-center transition ${
+                  cost === "Paid"
+                    ? "border-amber-400/50 bg-amber-500/20 text-amber-200"
+                    : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
+                }`}
+              >
+                <div className="text-2xl mb-2">💰</div>
+                <div className="font-semibold">Paid</div>
+              </motion.button>
+            </div>
+          </div>
+
           {/* Description */}
           <div className="mb-8">
             <label
               className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
             >
-              Job Description *
+              Description (Optional)
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe the role, responsibilities, and what you're looking for..."
-              required
-              rows={6}
+              placeholder="Describe what this resource covers and why it's helpful..."
+              rows={4}
               className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-none"
             />
           </div>
 
-          {/* Salary */}
+          {/* Duration */}
           <div className="mb-8">
             <label
               className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
             >
-              Salary (Optional)
+              Duration (Optional)
             </label>
             <input
               type="text"
-              value={salary}
-              onChange={(e) => setSalary(e.target.value)}
-              placeholder="e.g., $50,000 - $70,000/year or Competitive"
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+              placeholder="e.g., 40+ hours, 8 weeks, 4 hours"
               className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
             />
           </div>
 
-          {/* Application Link */}
+          {/* Level */}
           <div className="mb-8">
             <label
               className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
             >
-              Application Link (Optional)
+              Difficulty Level (Optional)
+            </label>
+            <select
+              value={level}
+              onChange={(e) => setLevel(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
+            >
+              <option value="" className="bg-slate-900 text-slate-400">
+                Select level...
+              </option>
+              {resourceLevels.map((l) => (
+                <option key={l} value={l} className="bg-slate-900 text-white">
+                  {l}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Rating */}
+          <div className="mb-8">
+            <label
+              className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
+            >
+              Rating (Optional)
             </label>
             <input
-              type="url"
-              value={applicationLink}
-              onChange={(e) => setApplicationLink(e.target.value)}
-              placeholder="https://yourcompany.com/apply"
+              type="number"
+              value={rating}
+              onChange={(e) => setRating(e.target.value)}
+              placeholder="0-5"
+              min="0"
+              max="5"
+              step="0.1"
               className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
             />
             <p className="mt-2 text-sm text-slate-400">
-              If not provided, applicants will contact you through the platform
+              Rate this resource from 0 to 5 (optional)
             </p>
           </div>
 
           {/* Submit Button */}
           <div className="flex items-center justify-end gap-4">
             <Link
-              href="/dashboard"
+              href="/resources"
               className="rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium text-white transition hover:bg-white/10"
             >
               Cancel
@@ -517,7 +489,7 @@ export default function PostJobPage() {
               className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition disabled:cursor-not-allowed disabled:opacity-70"
             >
               <Save className="h-4 w-4" />
-              {saving ? "Posting..." : "Post Job"}
+              {saving ? "Posting..." : "Post Resource"}
             </motion.button>
           </div>
         </motion.form>

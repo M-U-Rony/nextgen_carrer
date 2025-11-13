@@ -15,6 +15,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import type { IJob } from "@/models/Job";
+import { useAuth } from "@/hooks/useAuth";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -29,6 +30,7 @@ const gradientBackground =
 export default function JobDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   const [job, setJob] = useState<IJob | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -105,18 +107,18 @@ export default function JobDetailsPage() {
           Back to Jobs
         </motion.button>
 
-        <motion.article
+          <motion.article
           variants={fadeIn}
           initial="hidden"
           animate="visible"
-          className="rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur"
+          className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 backdrop-blur"
         >
           {/* Header */}
           <div className="mb-6">
             <div className="mb-4 flex items-start justify-between">
               <div className="flex-1">
                 <h1
-                  className={`${inter.className} mb-2 text-3xl font-bold sm:text-4xl`}
+                  className={`${inter.className} mb-2 text-2xl font-bold sm:text-3xl md:text-4xl`}
                 >
                   {job.title}
                 </h1>
@@ -128,7 +130,7 @@ export default function JobDetailsPage() {
             </div>
 
             {/* Quick Info */}
-            <div className="flex flex-wrap gap-4 text-sm text-slate-300">
+            <div className="flex flex-wrap gap-3 sm:gap-4 text-sm text-slate-300">
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
                 {job.location}
@@ -174,7 +176,7 @@ export default function JobDetailsPage() {
             >
               Required Skills
             </h2>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               {job.requiredSkills.map((skill) => (
                 <span
                   key={skill}
@@ -187,32 +189,34 @@ export default function JobDetailsPage() {
             </div>
           </div>
 
-          {/* Application Section */}
-          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-6">
-            <h3
-              className={`${inter.className} mb-4 text-lg font-semibold`}
-            >
-              Ready to Apply?
-            </h3>
-            {job.applicationLink ? (
-              <motion.a
-                href={job.applicationLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-[#2563EB] to-[#9333EA] px-6 py-3 font-semibold text-white shadow-lg transition"
+          {/* Application Section - Only show for job seekers */}
+          {user?.userType !== "employer" && (
+            <div className="rounded-xl border border-white/10 bg-slate-900/70 p-6">
+              <h3
+                className={`${inter.className} mb-4 text-lg font-semibold`}
               >
-                Apply Now
-                <ExternalLink className="h-4 w-4" />
-              </motion.a>
-            ) : (
-              <p className="text-sm text-slate-400">
-                Application link not available. Please contact the company
-                directly.
-              </p>
-            )}
-          </div>
+                Ready to Apply?
+              </h3>
+              {job.applicationLink ? (
+                <motion.a
+                  href={job.applicationLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-[#2563EB] to-[#9333EA] px-6 py-3 font-semibold text-white shadow-lg transition"
+                >
+                  Apply Now
+                  <ExternalLink className="h-4 w-4" />
+                </motion.a>
+              ) : (
+                <p className="text-sm text-slate-400">
+                  Application link not available. Please contact the company
+                  directly.
+                </p>
+              )}
+            </div>
+          )}
         </motion.article>
       </section>
     </motion.main>

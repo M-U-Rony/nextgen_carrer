@@ -9,6 +9,7 @@ declare module "next-auth" {
       email?: string | null;
       image?: string | null;
       userType?: "job_seeker" | "employer" | null;
+      needsRoleSelection?: boolean;
     };
   }
 
@@ -28,6 +29,7 @@ declare module "next-auth/jwt" {
     name?: string | null;
     picture?: string | null;
     userType?: "job_seeker" | "employer" | null;
+    needsRoleSelection?: boolean;
   }
 }
 

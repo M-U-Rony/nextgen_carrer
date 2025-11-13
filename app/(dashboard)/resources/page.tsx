@@ -13,6 +13,7 @@ import {
   DollarSign,
   Clock,
   Star,
+  Plus,
 } from "lucide-react";
 import type { IResource } from "@/models/Resource";
 
@@ -117,14 +118,28 @@ export default function ResourcesPage() {
           animate="visible"
           className="mb-8"
         >
-          <h1
-            className={`${inter.className} mb-4 text-4xl font-bold sm:text-5xl`}
-          >
-            Learning Resources
-          </h1>
-          <p className="text-lg text-slate-300">
-            Discover courses and tutorials to advance your skills
-          </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1
+                className={`${inter.className} mb-2 sm:mb-4 text-3xl font-bold sm:text-4xl md:text-5xl`}
+              >
+                Learning Resources
+              </h1>
+              <p className="text-base sm:text-lg text-slate-300">
+                Discover courses and tutorials to advance your skills
+              </p>
+            </div>
+            <Link href="/resources/post">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:shadow-xl"
+              >
+                <Plus className="h-4 w-4" />
+                Post Resource
+              </motion.button>
+            </Link>
+          </div>
         </motion.div>
 
         {/* Search Bar */}
@@ -271,7 +286,7 @@ export default function ResourcesPage() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             {resources.map((resource, index) => (
               <motion.div
                 key={resource._id}

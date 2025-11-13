@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Inter } from "next/font/google";
-import { useMemo, useState, useEffect, type FC } from "react";
+import { useMemo, useState, useEffect, useCallback, type FC } from "react";
 import { ExternalLink } from "lucide-react";
 import type { IJob } from "@/models/Job";
 import type { IResource } from "@/models/Resource";
 import type { IUser } from "@/models/User";
 import { useUserType } from "@/hooks/useUserType";
+import { useAuth } from "@/hooks/useAuth";
+import { getToken } from "@/lib/api-client";
+import { useSession } from "next-auth/react";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -55,12 +57,8 @@ interface RecommendedResource extends IResource {
 }
 
 const DashboardPage: FC = () => {
-  const { data: session, status } = useSession({
-    required: false,
-    onUnauthenticated: () => {
-      // This will be handled by the redirect below
-    },
-  });
+  const { user: authUser, isLoading, isAuthenticated } = useAuth();
+  const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const [recommendedJobs, setRecommendedJobs] = useState<RecommendedJob[]>([]);
   const [recommendedResources, setRecommendedResources] = useState<
@@ -89,11 +87,11 @@ const DashboardPage: FC = () => {
   const user = useMemo(() => {
     if (userData) {
       return {
-        name: userData.name || session?.user?.name || "User",
-        email: userData.email || session?.user?.email || "",
+        name: userData.name || authUser?.name || "User",
+        email: userData.email || authUser?.email || "",
         image:
           userData.image ||
-          session?.user?.image ||
+          authUser?.image ||
           "https://i.pravatar.cc/120?img=5",
         skills: userData.skills || [],
         preferredTrack: userData.preferredTrack || "",
@@ -102,11 +100,11 @@ const DashboardPage: FC = () => {
         profileCompletion: calculateProfileCompletion(userData),
       };
     }
-    if (session?.user) {
+    if (authUser) {
       return {
-        name: session.user.name || "User",
-        email: session.user.email || "",
-        image: session.user.image || "https://i.pravatar.cc/120?img=5",
+        name: authUser.name || "User",
+        email: authUser.email || "",
+        image: authUser.image || "https://i.pravatar.cc/120?img=5",
         skills: [],
         preferredTrack: "",
         education: "",
@@ -124,7 +122,7 @@ const DashboardPage: FC = () => {
       experienceLevel: "",
       profileCompletion: 0,
     };
-  }, [session, userData]);
+  }, [authUser, userData]);
 
   const userType = useUserType(userData);
 
@@ -147,32 +145,21 @@ const DashboardPage: FC = () => {
     return [user.skills.slice(0, midpoint), user.skills.slice(midpoint)];
   }, [user.skills]);
 
-  // Fetch user profile and recommendations
-  useEffect(() => {
-    if (session) {
-      fetchUserProfile();
-      // Only fetch recommendations for job seekers
-      if (session.user?.userType === "job_seeker" || !session.user?.userType) {
-        fetchRecommendedJobs();
-        fetchRecommendedResources();
-      }
-      // Fetch employer jobs for employers
-      if (session.user?.userType === "employer") {
-        fetchEmployerJobs();
-      }
-    }
-  }, [session]);
-
-  // Also fetch employer jobs when userData changes and user is employer
-  useEffect(() => {
-    if (userType === "employer" && userData) {
-      fetchEmployerJobs();
-    }
-  }, [userType, userData]);
-
-  const fetchUserProfile = async () => {
+  // Define fetch functions with useCallback to prevent unnecessary re-renders
+  const fetchUserProfile = useCallback(async () => {
     try {
-      const response = await fetch("/api/user/profile");
+      const token = getToken();
+      const headers: Record<string, string> = {};
+      
+      // Only add Authorization header if we have a JWT token
+      // For NextAuth sessions, the session cookie will be sent automatically
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      
+      const response = await fetch("/api/user/profile", {
+        headers,
+      });
       const data = await response.json();
       if (response.ok && data.user) {
         setUserData(data.user);
@@ -180,12 +167,21 @@ const DashboardPage: FC = () => {
     } catch (error) {
       console.error("Error fetching user profile:", error);
     }
-  };
+  }, []);
 
-  const fetchRecommendedJobs = async () => {
+  const fetchRecommendedJobs = useCallback(async () => {
     try {
       setLoadingJobs(true);
-      const response = await fetch("/api/recommendations/jobs");
+      const token = getToken();
+      const headers: Record<string, string> = {};
+      
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      
+      const response = await fetch("/api/recommendations/jobs", {
+        headers,
+      });
       const data = await response.json();
       if (response.ok) {
         setRecommendedJobs(data.jobs || []);
@@ -195,12 +191,21 @@ const DashboardPage: FC = () => {
     } finally {
       setLoadingJobs(false);
     }
-  };
+  }, []);
 
-  const fetchRecommendedResources = async () => {
+  const fetchRecommendedResources = useCallback(async () => {
     try {
       setLoadingResources(true);
-      const response = await fetch("/api/recommendations/resources");
+      const token = getToken();
+      const headers: Record<string, string> = {};
+      
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      
+      const response = await fetch("/api/recommendations/resources", {
+        headers,
+      });
       const data = await response.json();
       if (response.ok) {
         setRecommendedResources(data.resources || []);
@@ -210,12 +215,21 @@ const DashboardPage: FC = () => {
     } finally {
       setLoadingResources(false);
     }
-  };
+  }, []);
 
-  const fetchEmployerJobs = async () => {
+  const fetchEmployerJobs = useCallback(async () => {
     try {
       setLoadingEmployerJobs(true);
-      const response = await fetch("/api/jobs/my-jobs");
+      const token = getToken();
+      const headers: Record<string, string> = {};
+      
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      
+      const response = await fetch("/api/jobs/my-jobs", {
+        headers,
+      });
       const data = await response.json();
       if (response.ok) {
         setEmployerJobs(data.jobs || []);
@@ -225,10 +239,53 @@ const DashboardPage: FC = () => {
     } finally {
       setLoadingEmployerJobs(false);
     }
-  };
+  }, []);
+
+  // Redirect if not authenticated (wait for session to load first)
+  useEffect(() => {
+    // Wait for both auth and session to finish loading before redirecting
+    const sessionLoading = sessionStatus === "loading";
+    if (isLoading || sessionLoading) {
+      return; // Still loading, don't redirect yet
+    }
+    
+    // Only redirect if we're sure the user is not authenticated
+    if (!isAuthenticated && sessionStatus !== "authenticated") {
+      router.push("/signin");
+    }
+  }, [isLoading, isAuthenticated, sessionStatus, router]);
+
+  // Redirect to select-role if user needs role selection (for new Google OAuth users)
+  useEffect(() => {
+    if (session?.user && (session.user as any).needsRoleSelection) {
+      router.push("/select-role");
+    }
+  }, [session, router]);
+
+  // Fetch user profile first
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUserProfile();
+    }
+  }, [isAuthenticated, fetchUserProfile]);
+
+  // Fetch data based on user type after userData is loaded
+  useEffect(() => {
+    if (!isAuthenticated || !userData) return;
+
+    // Only fetch recommendations for job seekers
+    if (userType === "job_seeker") {
+      fetchRecommendedJobs();
+      fetchRecommendedResources();
+    }
+    // Fetch employer jobs for employers
+    if (userType === "employer") {
+      fetchEmployerJobs();
+    }
+  }, [isAuthenticated, userData, userType, fetchRecommendedJobs, fetchRecommendedResources, fetchEmployerJobs]);
 
 
-  if (status === "loading") {
+  if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
         <div className="text-center">
@@ -239,8 +296,7 @@ const DashboardPage: FC = () => {
     );
   }
 
-  if (!session) {
-    router.push("/signin");
+  if (!isAuthenticated) {
     return null;
   }
 
@@ -251,7 +307,7 @@ const DashboardPage: FC = () => {
       animate="visible"
       className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10`}
     >
-      <section className="mx-auto flex max-w-6xl flex-col gap-10">
+      <section className="mx-auto flex max-w-6xl flex-col gap-6 sm:gap-8 lg:gap-10">
         {/* Profile Incomplete Banner */}
         {isProfileIncomplete && (
           <motion.div
@@ -395,7 +451,7 @@ const DashboardPage: FC = () => {
                   </Link>
                 </div>
               ) : (
-                <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="mt-6 grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   {employerJobs.slice(0, 6).map((job, index) => (
                     <motion.article
                       key={job._id}
@@ -560,7 +616,7 @@ const DashboardPage: FC = () => {
             </div>
 
             {user.skills.length > 0 ? (
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="mt-5 grid gap-3 grid-cols-1 sm:grid-cols-2">
                 {skillsColumns.map((column, columnIndex) => (
                   <div
                     key={`column-${columnIndex}`}
@@ -633,7 +689,7 @@ const DashboardPage: FC = () => {
               </p>
             </div>
           ) : (
-            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-6 grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {recommendedJobs.map((job, index) => (
                 <motion.article
                   key={job._id}
@@ -661,7 +717,7 @@ const DashboardPage: FC = () => {
                       <p className="text-xs text-blue-200">{job.matchReason}</p>
                     </div>
                   )}
-                  <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-200">
+                  <div className="mt-4 flex flex-wrap gap-1.5 sm:gap-2 text-xs text-slate-200">
                     {(job.matchedSkills || []).slice(0, 3).map((skill) => (
                       <span
                         key={skill}
@@ -749,7 +805,7 @@ const DashboardPage: FC = () => {
               </p>
             </div>
           ) : (
-            <div className="mt-6 grid gap-5 md:grid-cols-2">
+            <div className="mt-6 grid gap-4 sm:gap-5 grid-cols-1 md:grid-cols-2">
               {recommendedResources.map((resource, index) => (
                 <motion.article
                   key={resource._id}
@@ -784,7 +840,7 @@ const DashboardPage: FC = () => {
                       </p>
                     </div>
                   )}
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-200">
+                  <div className="mt-3 flex flex-wrap gap-1.5 sm:gap-2 text-xs text-slate-200">
                     {(resource.matchedSkills || []).slice(0, 3).map((skill) => (
                       <span
                         key={skill}

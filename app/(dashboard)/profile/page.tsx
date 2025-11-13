@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { Inter } from "next/font/google";
 import { Save, ArrowLeft, Check, X } from "lucide-react";
 import type { IUser } from "@/models/User";
+import { useAuth } from "@/hooks/useAuth";
+import { getToken } from "@/lib/api-client";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -66,11 +67,14 @@ const experienceLevels = ["Fresher", "Junior", "Mid", "Senior"];
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { isAuthenticated, isLoading } = useAuth();
   const [user, setUser] = useState<IUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Form state - User Type
+  const [userType, setUserType] = useState<"job_seeker" | "employer">("job_seeker");
 
   // Form state - Job Seeker
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
@@ -84,24 +88,31 @@ export default function ProfilePage() {
   const [companyDescription, setCompanyDescription] = useState("");
 
   useEffect(() => {
-    if (status === "loading") return;
+    if (isLoading) return;
 
-    if (!session) {
+    if (!isAuthenticated) {
       router.push("/signin");
       return;
     }
 
     fetchUserProfile();
-  }, [session, status, router]);
+  }, [isAuthenticated, isLoading, router]);
 
   const fetchUserProfile = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/user/profile");
+      const token = getToken();
+      const response = await fetch("/api/user/profile", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const data = await response.json();
 
       if (response.ok && data.user) {
         setUser(data.user);
+        // Set user type
+        setUserType(data.user.userType || "job_seeker");
         // Set form state based on user type
         if (data.user.userType === "employer") {
           setCompanyName(data.user.companyName || "");
@@ -132,24 +143,43 @@ export default function ProfilePage() {
       setSaving(true);
       setSuccessMessage(null);
 
-      const updateData =
-        user?.userType === "employer"
-          ? {
-              companyName,
-              companyWebsite,
-              companyDescription,
-            }
-          : {
-              skills: selectedSkills,
-              preferredTrack,
-              education,
-              experienceLevel,
-            };
+      const updateData: any = {
+        userType,
+      };
 
+      // Check if userType is changing
+      const isUserTypeChanging = user?.userType && user.userType !== userType;
+
+      if (userType === "employer") {
+        updateData.companyName = companyName;
+        updateData.companyWebsite = companyWebsite;
+        updateData.companyDescription = companyDescription;
+        // Clear job seeker fields only when switching to employer
+        if (isUserTypeChanging) {
+          updateData.skills = [];
+          updateData.preferredTrack = "";
+          updateData.education = "";
+          updateData.experienceLevel = "";
+        }
+      } else {
+        updateData.skills = selectedSkills;
+        updateData.preferredTrack = preferredTrack;
+        updateData.education = education;
+        updateData.experienceLevel = experienceLevel;
+        // Clear employer fields only when switching to job seeker
+        if (isUserTypeChanging) {
+          updateData.companyName = "";
+          updateData.companyWebsite = "";
+          updateData.companyDescription = "";
+        }
+      }
+
+      const token = getToken();
       const response = await fetch("/api/user/profile", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(updateData),
       });
@@ -159,9 +189,14 @@ export default function ProfilePage() {
       if (response.ok) {
         setSuccessMessage("Profile updated successfully!");
         setUser(data.user);
+        // Update userType state to reflect the change
+        if (data.user.userType) {
+          setUserType(data.user.userType);
+        }
+        // Refresh the page to update session and show correct form
         setTimeout(() => {
           setSuccessMessage(null);
-          router.push("/dashboard");
+          window.location.href = "/profile";
         }, 2000);
       } else {
         setSuccessMessage(data.error || "Failed to update profile");
@@ -174,7 +209,7 @@ export default function ProfilePage() {
     }
   };
 
-  if (status === "loading" || loading) {
+  if (isLoading || loading) {
     return (
       <div
         className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10 flex items-center justify-center`}
@@ -187,7 +222,7 @@ export default function ProfilePage() {
     );
   }
 
-  if (!session) {
+  if (!isAuthenticated) {
     return null;
   }
 
@@ -213,7 +248,7 @@ export default function ProfilePage() {
             Back to Dashboard
           </Link>
           <h1
-            className={`${inter.className} mb-4 text-4xl font-bold sm:text-5xl`}
+            className={`${inter.className} mb-4 text-3xl font-bold sm:text-4xl md:text-5xl`}
           >
             Profile Settings
           </h1>
@@ -241,9 +276,55 @@ export default function ProfilePage() {
           variants={fadeIn}
           initial="hidden"
           animate="visible"
-          className="rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur"
+          className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8 backdrop-blur"
         >
-          {user?.userType === "employer" ? (
+          {/* User Type Selection */}
+          <div className="mb-8">
+            <label
+              className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
+            >
+              Account Type *
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <motion.button
+                type="button"
+                onClick={() => setUserType("job_seeker")}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`rounded-xl border-2 p-4 text-left transition-all ${
+                  userType === "job_seeker"
+                    ? "border-blue-500 bg-blue-500/20 text-white shadow-lg shadow-blue-500/20"
+                    : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
+                }`}
+              >
+                <div className="text-2xl mb-2">👤</div>
+                <div className="font-semibold">Job Seeker</div>
+                <div className="text-xs mt-1 opacity-70">
+                  Looking for opportunities
+                </div>
+              </motion.button>
+              <motion.button
+                type="button"
+                onClick={() => setUserType("employer")}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`rounded-xl border-2 p-4 text-left transition-all ${
+                  userType === "employer"
+                    ? "border-blue-500 bg-blue-500/20 text-white shadow-lg shadow-blue-500/20"
+                    : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
+                }`}
+              >
+                <div className="text-2xl mb-2">🏢</div>
+                <div className="font-semibold">Employer</div>
+                <div className="text-xs mt-1 opacity-70">Hiring talent</div>
+              </motion.button>
+            </div>
+            <p className="mt-2 text-sm text-slate-400">
+              Select how you want to use NextGen Carrer. You can change this anytime.
+            </p>
+          </div>
+
+          {userType === "employer" ? (
             // Employer Profile Form
             <>
               {/* Company Name */}
@@ -390,7 +471,7 @@ export default function ProfilePage() {
                   Select all skills that apply to you. This helps us match you
                   with relevant opportunities.
                 </p>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3 md:grid-cols-4">
                   {availableSkills.map((skill) => {
                     const isSelected = selectedSkills.includes(skill);
                     return (

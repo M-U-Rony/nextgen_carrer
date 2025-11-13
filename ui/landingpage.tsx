@@ -64,7 +64,7 @@ const testimonials = [
   },
 ];
 
-const typingTitle = "Nextgen_Career";
+const typingTitle = "NextGen Carrer";
 
 function AnimatedTitle() {
   const letterDelay = 0.09;
@@ -171,13 +171,13 @@ export default function LandingPage() {
 
         <AnimatedTitle />
 
-        <div className="relative mx-auto flex max-w-6xl flex-col gap-14 px-4 pb-16 pt-10 sm:gap-16 sm:px-6 sm:pb-20 sm:pt-12 lg:flex-row lg:items-center lg:gap-24 lg:pb-24 lg:pt-16">
+        <div className="relative mx-auto flex max-w-6xl flex-col gap-10 px-4 pb-12 pt-8 sm:gap-14 sm:px-6 sm:pb-16 sm:pt-10 md:gap-16 md:pb-20 md:pt-12 lg:flex-row lg:items-center lg:gap-24 lg:pb-24 lg:pt-16">
           <div className="max-w-xl space-y-8">
             <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-sm font-medium text-white/80 backdrop-blur">
               <SparkIcon className="h-4 w-4 text-cyan-400" />
               AI-Powered Career Roadmaps
             </span>
-            <h1 className="text-3xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
+            <h1 className="text-2xl font-bold leading-tight text-white sm:text-4xl md:text-5xl lg:text-6xl">
               Connect Your Skills to Real Opportunities
             </h1>
             <p className="text-base text-slate-200 sm:text-lg">
@@ -287,7 +287,7 @@ export default function LandingPage() {
           </p>
         </div>
 
-        <div className="mt-16 grid gap-10 md:grid-cols-3">
+        <div className="mt-12 sm:mt-16 grid gap-6 sm:gap-8 md:gap-10 grid-cols-1 md:grid-cols-3">
           {steps.map(({ title, description, icon }, index) => (
             <div
               key={title}
@@ -331,7 +331,7 @@ export default function LandingPage() {
               </p>
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2">
+            <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2">
               {features.map((feature) => (
                 <div
                   key={feature.title}
@@ -364,7 +364,7 @@ export default function LandingPage() {
           </h2>
         </div>
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
+        <div className="mt-8 sm:mt-12 grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2">
           {testimonials.map((testimonial) => (
             <div
               key={testimonial.quote}

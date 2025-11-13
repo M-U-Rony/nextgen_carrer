@@ -2,30 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Resource from "@/models/Resource";
 import User from "@/models/User";
-import { auth } from "@/auth";
+import { getAuthenticatedUser } from "@/lib/auth-middleware";
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-
-    const session = await auth();
-
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    const authResult = await getAuthenticatedUser(request);
+    
+    if (authResult.error) {
+      return authResult.error;
     }
 
-    // Get user with skills and preferred track
-    const user = await User.findOne({ email: session.user.email });
+    const { user } = authResult;
+    await connectDB();
 
-    if (!user) {
+    // Get user with skills and preferred track
+    const dbUser = await User.findById(user.userId);
+
+    if (!dbUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const userSkills = user.skills || [];
-    const preferredTrack = user.preferredTrack || "";
+    const userSkills = dbUser.skills || [];
+    const preferredTrack = dbUser.preferredTrack || "";
 
     // Fetch all resources
     const allResources = await Resource.find({});

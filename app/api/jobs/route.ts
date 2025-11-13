@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Job from "@/models/Job";
 import User from "@/models/User";
-import { auth } from "@/auth";
+import { getAuthenticatedUser } from "@/lib/auth-middleware";
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,20 +58,18 @@ export async function GET(request: NextRequest) {
 // POST - Create a new job (employers only)
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-
-    const session = await auth();
-
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    const authResult = await getAuthenticatedUser(request);
+    
+    if (authResult.error) {
+      return authResult.error;
     }
 
+    const { user } = authResult;
+    await connectDB();
+
     // Check if user is an employer
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.userType !== "employer") {
+    const dbUser = await User.findById(user.userId);
+    if (!dbUser || dbUser.userType !== "employer") {
       return NextResponse.json(
         { error: "Only employers can post jobs" },
         { status: 403 }
@@ -128,7 +126,7 @@ export async function POST(request: NextRequest) {
     // Create job
     const job = await Job.create({
       title: title.trim(),
-      company: (company || user.companyName || user.name).trim(),
+      company: (company || dbUser.companyName || dbUser.name).trim(),
       location: location.trim(),
       requiredSkills: skillsArray.filter((skill: string) => skill && skill.trim() !== "").map((skill: string) => skill.trim()),
       experienceLevel,
@@ -137,7 +135,7 @@ export async function POST(request: NextRequest) {
       description: description.trim(),
       salary: salary?.trim() || undefined,
       applicationLink: applicationLink?.trim() || undefined,
-      employerId: user._id.toString(),
+      employerId: dbUser._id.toString(),
       postedDate: new Date(),
     });
 

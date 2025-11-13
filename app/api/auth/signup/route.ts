@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate userType
-    if (!userType || !["job_seeker", "employer"].includes(userType)) {
+    // Validate userType if provided (optional, defaults to job_seeker)
+    if (userType && !["job_seeker", "employer"].includes(userType)) {
       return NextResponse.json(
         { error: "Valid user type (job_seeker or employer) is required" },
         { status: 400 }
@@ -45,12 +45,12 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user
+    // Create user (default to job_seeker, can be changed in profile)
     const user = await User.create({
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
-      userType: userType || "job_seeker",
+      userType: userType || "job_seeker", // Default to job_seeker
       emailVerified: new Date(),
     });
 

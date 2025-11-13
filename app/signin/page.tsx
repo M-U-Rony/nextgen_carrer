@@ -3,14 +3,14 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { motion } from "framer-motion";
 import { Inter } from "next/font/google";
 import { useForm, type SubmitHandler, type FieldErrors } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
+import { signIn, useSession } from "next-auth/react";
+import { useAuth } from "@/hooks/useAuth";
+import { useEffect } from "react";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -22,15 +22,15 @@ const fadeIn = {
 const backgroundGradient =
   "bg-[radial-gradient(circle_at_20%_20%,#1e40af55,transparent_60%),radial-gradient(circle_at_80%_30%,#a855f755,transparent_55%),linear-gradient(135deg,#020617,#0f172a)]";
 
-const signInSchema = z.object({
-  email: z.string().email("Enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
-
-type SignInValues = z.infer<typeof signInSchema>;
+type SignInValues = {
+  email: string;
+  password: string;
+};
 
 export default function SignInPage() {
   const router = useRouter();
+  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { data: session, status: sessionStatus } = useSession();
   const [showPassword, setShowPassword] = useState(false);
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
   const [formStatus, setFormStatus] = useState<{
@@ -38,13 +38,31 @@ export default function SignInPage() {
     message: string;
   } | null>(null);
 
+  // Redirect if already authenticated
+  useEffect(() => {
+    // Wait for both auth and session to finish loading
+    if (authLoading || sessionStatus === "loading") {
+      return;
+    }
+    
+    if (sessionStatus === "authenticated" || isAuthenticated) {
+      // Check if user needs role selection
+      if (session?.user && (session.user as any).needsRoleSelection) {
+        // Use window.location for full page reload to ensure session is properly loaded
+        window.location.href = "/select-role";
+      } else {
+        // Use window.location for full page reload to ensure session is properly loaded
+        window.location.href = "/dashboard";
+      }
+    }
+  }, [isAuthenticated, authLoading, session, sessionStatus]);
+
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     reset,
   } = useForm<SignInValues>({
-    resolver: zodResolver(signInSchema),
     defaultValues: {
       email: "",
       password: "",
@@ -63,39 +81,45 @@ export default function SignInPage() {
     setFormStatus(null);
     
     try {
-      const result = await signIn("credentials", {
-        email: values.email.trim(),
-        password: values.password,
-        redirect: false,
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: values.email.trim(),
+          password: values.password,
+        }),
       });
 
-      if (result?.error) {
-        // More specific error messages based on the error type
-        let errorMessage = "Something went wrong while signing in. Please try again.";
-        
-        if (result.error === "CredentialsSignin") {
-          errorMessage = "Invalid email or password. Please check your credentials and try again.";
-        } else if (result.error.includes("ECONNREFUSED")) {
-          errorMessage = "Unable to connect to the server. Please check your internet connection.";
-        }
-        
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMessage = data.error || "Invalid email or password. Please check your credentials and try again.";
         toast.error(errorMessage);
         setFormStatus({
           type: "error",
           message: errorMessage,
         });
-      } else if (result?.ok) {
-        // Clear form and redirect on success
+        return;
+      }
+
+      // Store tokens and user data
+      if (data.accessToken && data.refreshToken && data.user) {
+        login(data.accessToken, data.refreshToken, data.user);
+        
+        // Clear form
         reset({ email: values.email, password: "" });
         
-        // Show success message before redirect
+        // Show success message
         toast.success("Successfully signed in!");
         
-        // Small delay to allow toast to show before redirect
+        // Redirect to dashboard
         setTimeout(() => {
           router.push("/dashboard");
-          router.refresh();
         }, 500);
+      } else {
+        throw new Error("Invalid response from server");
       }
     } catch (error) {
       console.error(error);
@@ -110,36 +134,18 @@ export default function SignInPage() {
 
   const handleGoogleSignIn = async () => {
     setFormStatus(null);
-    
-    if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
-      const errorMessage = "Google authentication is not properly configured. Please contact support.";
-      toast.error(errorMessage);
-      setFormStatus({
-        type: "error",
-        message: errorMessage,
-      });
-      return;
-    }
-
     try {
-      const result = await signIn("google", { 
+      // OAuth requires redirect: true to work properly
+      await signIn("google", {
         callbackUrl: "/dashboard",
-        redirect: false
+        redirect: true,
       });
-
-      if (result?.error) {
-        throw new Error(result.error);
-      }
     } catch (error) {
       console.error("Google sign-in error:", error);
-      const errorMessage = error instanceof Error 
-        ? `Failed to sign in with Google: ${error.message}`
-        : "Failed to sign in with Google. Please try again later.";
-      
-      toast.error(errorMessage);
+      toast.error("Something went wrong with Google sign-in. Please try again.");
       setFormStatus({
         type: "error",
-        message: errorMessage,
+        message: "Something went wrong with Google sign-in. Please try again.",
       });
     }
   };
@@ -182,7 +188,7 @@ export default function SignInPage() {
         variants={fadeIn}
         initial="hidden"
         animate="visible"
-        className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/70 p-8 shadow-xl backdrop-blur-xl sm:p-10"
+        className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/70 p-6 shadow-xl backdrop-blur-xl sm:p-8 md:p-10"
       >
         {formStatus && (
           <motion.div
@@ -201,9 +207,9 @@ export default function SignInPage() {
 
         <div className="mb-8 text-center">
           <h1
-            className={`${inter.className} mt-6 text-2xl font-semibold sm:text-3xl`}
+            className={`${inter.className} mt-4 text-2xl font-semibold sm:text-3xl`}
           >
-            Welcome Back to Nextgen_Career
+            Welcome Back to NextGen Carrer
           </h1>
           <p className="mt-3 text-sm text-slate-300">
             Sign in to continue your career journey
@@ -225,7 +231,13 @@ export default function SignInPage() {
               <input
                 id="email"
                 type="email"
-                {...register("email")}
+                {...register("email", {
+                  required: "Enter a valid email address",
+                  pattern: {
+                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                    message: "Enter a valid email address",
+                  },
+                })}
                 onFocus={() => formStatus && setFormStatus(null)}
                 className="peer w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white shadow-inner transition focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-2 focus:ring-offset-slate-900"
                 placeholder="you@example.com"
@@ -329,49 +341,45 @@ export default function SignInPage() {
           </motion.button>
         </form>
 
-        {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/10"></div>
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-slate-900/70 px-2 text-slate-400">Or continue with</span>
-            </div>
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-white/10"></div>
           </div>
-        )}
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-slate-900/70 px-2 text-slate-400">Or continue with</span>
+          </div>
+        </div>
 
-        {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
-          <motion.button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={isSubmitting}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div className="flex items-center justify-center gap-3">
-              <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                />
-              </svg>
-              Sign in with Google
-            </div>
-          </motion.button>
-        )}
+        <motion.button
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={isSubmitting}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-white/20 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <div className="flex items-center justify-center gap-3">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="currentColor"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="currentColor"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+              />
+              <path
+                fill="currentColor"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              />
+            </svg>
+            Sign in with Google
+          </div>
+        </motion.button>
 
         <p className="mt-8 text-center text-sm text-slate-300">
           Don&rsquo;t have an account?{" "}

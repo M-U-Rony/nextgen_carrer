@@ -1,12 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Inter } from "next/font/google";
 import { useForm, type SubmitHandler } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Mail, Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
@@ -21,30 +19,14 @@ const fadeIn = {
 const backgroundGradient =
   "bg-[radial-gradient(circle_at_20%_20%,#1e40af55,transparent_60%),radial-gradient(circle_at_80%_30%,#a855f755,transparent_55%),linear-gradient(135deg,#020617,#0f172a)]";
 
-const forgotPasswordSchema = z.object({
-  email: z.string().email("Enter a valid email address"),
-});
+type ForgotPasswordValues = {
+  email: string;
+};
 
-const resetPasswordSchema = z
-  .object({
-    newPassword: z
-      .string()
-      .min(8, "Password must be at least 8 characters")
-      .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-      .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-      .regex(
-        /[^a-zA-Z0-9]/,
-        "Password must contain at least one special character"
-      ),
-    confirmPassword: z.string().min(8, "Confirm your password"),
-  })
-  .refine((values) => values.newPassword === values.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  });
-
-type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
-type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
+type ResetPasswordValues = {
+  newPassword: string;
+  confirmPassword: string;
+};
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -62,7 +44,6 @@ export default function ForgotPasswordPage() {
     formState: { errors, isSubmitting },
     watch,
   } = useForm<ForgotPasswordValues>({
-    resolver: zodResolver(forgotPasswordSchema),
     defaultValues: {
       email: "",
     },
@@ -73,14 +54,26 @@ export default function ForgotPasswordPage() {
     register: registerReset,
     handleSubmit: handleSubmitReset,
     formState: { errors: resetErrors, isSubmitting: isResetting },
+    watch: watchReset,
+    trigger: triggerReset,
   } = useForm<ResetPasswordValues>({
-    resolver: zodResolver(resetPasswordSchema),
     defaultValues: {
       newPassword: "",
       confirmPassword: "",
     },
-    mode: "onSubmit",
+    mode: "onChange",
+    reValidateMode: "onChange",
   });
+
+  const watchedNewPassword = watchReset("newPassword");
+  const watchedConfirmPasswordReset = watchReset("confirmPassword");
+
+  // Trigger confirmPassword validation when newPassword changes
+  useEffect(() => {
+    if (watchedConfirmPasswordReset) {
+      triggerReset("confirmPassword");
+    }
+  }, [watchedNewPassword, watchedConfirmPasswordReset, triggerReset]);
 
   const onSubmit: SubmitHandler<ForgotPasswordValues> = async (values) => {
     setEmail(values.email);
@@ -169,7 +162,7 @@ export default function ForgotPasswordPage() {
         variants={fadeIn}
         initial="hidden"
         animate="visible"
-        className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/70 p-8 shadow-xl backdrop-blur-xl sm:p-10"
+        className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-slate-900/70 p-6 shadow-xl backdrop-blur-xl sm:p-8 md:p-10"
       >
         <Link
           href="/signin"
@@ -229,7 +222,13 @@ export default function ForgotPasswordPage() {
                 <input
                   id="email"
                   type="email"
-                  {...register("email")}
+                  {...register("email", {
+                    required: "Enter a valid email address",
+                    pattern: {
+                      value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                      message: "Enter a valid email address",
+                    },
+                  })}
                   onFocus={() => formStatus && setFormStatus(null)}
                   className="peer w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pl-11 text-sm text-white shadow-inner transition focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-2 focus:ring-offset-slate-900"
                   placeholder="you@example.com"
@@ -279,7 +278,29 @@ export default function ForgotPasswordPage() {
                 <input
                   id="newPassword"
                   type={showPassword ? "text" : "password"}
-                  {...registerReset("newPassword")}
+                  {...registerReset("newPassword", {
+                    required: "Password is required",
+                    minLength: {
+                      value: 8,
+                      message: "Password must be at least 8 characters",
+                    },
+                    validate: {
+                      hasLowercase: (value) =>
+                        /[a-z]/.test(value) ||
+                        "Password must contain at least one lowercase letter",
+                      hasUppercase: (value) =>
+                        /[A-Z]/.test(value) ||
+                        "Password must contain at least one uppercase letter",
+                      hasSpecial: (value) =>
+                        /[^a-zA-Z0-9]/.test(value) ||
+                        "Password must contain at least one special character",
+                    },
+                    onChange: () => {
+                      if (watchedConfirmPasswordReset) {
+                        triggerReset("confirmPassword");
+                      }
+                    },
+                  })}
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pr-11 text-sm text-white shadow-inner transition focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-2 focus:ring-offset-slate-900"
                   placeholder="••••••••"
                 />
@@ -313,7 +334,16 @@ export default function ForgotPasswordPage() {
                 <input
                   id="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
-                  {...registerReset("confirmPassword")}
+                  {...registerReset("confirmPassword", {
+                    required: "Confirm your password",
+                    minLength: {
+                      value: 8,
+                      message: "Confirm your password",
+                    },
+                    validate: (value) =>
+                      value === watchedNewPassword || "Passwords do not match",
+                    onChange: () => triggerReset("confirmPassword"),
+                  })}
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pr-11 text-sm text-white shadow-inner transition focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-2 focus:ring-offset-slate-900"
                   placeholder="••••••••"
                 />

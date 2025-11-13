@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Job from "@/models/Job";
 import User from "@/models/User";
-import { auth } from "@/auth";
+import { getAuthenticatedUser } from "@/lib/auth-middleware";
 
 // GET - Get a single job by ID
 export async function GET(
@@ -35,20 +35,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
-
-    const session = await auth();
-
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    const authResult = await getAuthenticatedUser(request);
+    
+    if (authResult.error) {
+      return authResult.error;
     }
 
+    const { user } = authResult;
+    await connectDB();
+
     // Check if user is an employer
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.userType !== "employer") {
+    const dbUser = await User.findById(user.userId);
+    if (!dbUser || dbUser.userType !== "employer") {
       return NextResponse.json(
         { error: "Only employers can update jobs" },
         { status: 403 }
@@ -62,7 +60,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    if (job.employerId !== user._id.toString()) {
+    if (job.employerId !== dbUser._id.toString()) {
       return NextResponse.json(
         { error: "You can only update your own jobs" },
         { status: 403 }
@@ -128,20 +126,18 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await connectDB();
-
-    const session = await auth();
-
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    const authResult = await getAuthenticatedUser(request);
+    
+    if (authResult.error) {
+      return authResult.error;
     }
 
+    const { user } = authResult;
+    await connectDB();
+
     // Check if user is an employer
-    const user = await User.findOne({ email: session.user.email });
-    if (!user || user.userType !== "employer") {
+    const dbUser = await User.findById(user.userId);
+    if (!dbUser || dbUser.userType !== "employer") {
       return NextResponse.json(
         { error: "Only employers can delete jobs" },
         { status: 403 }
@@ -155,7 +151,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    if (job.employerId !== user._id.toString()) {
+    if (job.employerId !== dbUser._id.toString()) {
       return NextResponse.json(
         { error: "You can only delete your own jobs" },
         { status: 403 }
