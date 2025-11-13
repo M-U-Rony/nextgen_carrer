@@ -7,10 +7,16 @@ export interface IUser {
   password?: string;
   image?: string;
   emailVerified?: Date;
+  userType: "job_seeker" | "employer";
+  // Job Seeker specific fields
   skills?: string[];
   preferredTrack?: string;
   education?: string;
   experienceLevel?: string;
+  // Employer specific fields
+  companyName?: string;
+  companyWebsite?: string;
+  companyDescription?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -39,6 +45,13 @@ const UserSchema = new Schema<IUser>(
     emailVerified: {
       type: Date,
     },
+    userType: {
+      type: String,
+      enum: ["job_seeker", "employer"],
+      required: [true, "User type is required"],
+      default: "job_seeker",
+    },
+    // Job Seeker specific fields
     skills: {
       type: [String],
       default: [],
@@ -52,6 +65,19 @@ const UserSchema = new Schema<IUser>(
       trim: true,
     },
     experienceLevel: {
+      type: String,
+      trim: true,
+    },
+    // Employer specific fields
+    companyName: {
+      type: String,
+      trim: true,
+    },
+    companyWebsite: {
+      type: String,
+      trim: true,
+    },
+    companyDescription: {
       type: String,
       trim: true,
     },

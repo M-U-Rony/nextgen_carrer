@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { motion } from "framer-motion";
 import { Inter } from "next/font/google";
-import { useForm, type SubmitHandler } from "react-hook-form";
+import { useForm, type SubmitHandler, type FieldErrors } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff } from "lucide-react";
+import toast from "react-hot-toast";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -25,13 +26,30 @@ const signUpSchema = z
   .object({
     fullName: z.string().min(2, "Enter your full name"),
     email: z.string().email("Enter a valid email address"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+      .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+      .regex(
+        /[^a-zA-Z0-9]/,
+        "Password must contain at least one special character"
+      ),
     confirmPassword: z.string().min(8, "Confirm your password"),
+    userType: z.union([z.literal("job_seeker"), z.literal("employer")]),
   })
   .refine((values) => values.password === values.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
-  });
+  })
+  .refine(
+    (values) =>
+      values.userType === "job_seeker" || values.userType === "employer",
+    {
+      message: "Please select an account type",
+      path: ["userType"],
+    }
+  );
 
 type SignUpValues = z.infer<typeof signUpSchema>;
 
@@ -45,12 +63,19 @@ export default function SignUpPage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const [selectedUserType, setSelectedUserType] = useState<
+    "job_seeker" | "employer"
+  >("job_seeker");
+  const submitAttemptedRef = useRef(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     reset,
+    watch,
+    setValue,
+    trigger,
   } = useForm<SignUpValues>({
     resolver: zodResolver(signUpSchema),
     defaultValues: {
@@ -58,9 +83,40 @@ export default function SignUpPage() {
       email: "",
       password: "",
       confirmPassword: "",
+      userType: "job_seeker" as "job_seeker" | "employer",
     },
-    mode: "onBlur",
+    mode: "onSubmit",
+    reValidateMode: "onChange",
+    shouldFocusError: false, // Prevent auto-focus which can cause issues
   });
+
+  // Sync selectedUserType with form value
+  const watchedUserType = watch("userType");
+  useEffect(() => {
+    if (watchedUserType && watchedUserType !== selectedUserType) {
+      setSelectedUserType(watchedUserType);
+    }
+  }, [watchedUserType, selectedUserType]);
+
+  // Show toast when validation errors appear after submit attempt
+  useEffect(() => {
+    if (submitAttemptedRef.current && Object.keys(errors).length > 0) {
+      const errorMessages = [
+        errors.fullName?.message,
+        errors.email?.message,
+        errors.userType?.message,
+        errors.password?.message,
+        errors.confirmPassword?.message,
+      ].filter(Boolean) as string[];
+
+      if (errorMessages.length > 0) {
+        toast.error(errorMessages[0], {
+          duration: 4000,
+        });
+        submitAttemptedRef.current = false; // Reset after showing toast
+      }
+    }
+  }, [errors]);
 
   const togglePasswordVisibility = () => {
     setShowPassword((prev) => !prev);
@@ -77,6 +133,7 @@ export default function SignUpPage() {
   };
 
   const onSubmit: SubmitHandler<SignUpValues> = async (values) => {
+    submitAttemptedRef.current = false; // Reset on successful validation
     setFormStatus(null);
     try {
       const response = await fetch("/api/auth/signup", {
@@ -88,12 +145,21 @@ export default function SignUpPage() {
           name: values.fullName,
           email: values.email,
           password: values.password,
+          userType: values.userType,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
+        // Check if it's a duplicate email error
+        if (data.error && data.error.toLowerCase().includes("already exists")) {
+          toast.error(
+            "This email is already registered. Please use a different email or sign in."
+          );
+        } else {
+          toast.error(data.error || "Something went wrong. Please try again.");
+        }
         setFormStatus({
           type: "error",
           message: data.error || "Something went wrong. Please try again.",
@@ -109,22 +175,27 @@ export default function SignUpPage() {
       });
 
       if (signInResult?.ok) {
+        toast.success("Account created successfully! Welcome!");
         reset({
           fullName: "",
           email: "",
-        password: "",
-        confirmPassword: "",
-      });
+          password: "",
+          confirmPassword: "",
+        });
         router.push("/dashboard");
         router.refresh();
       } else {
-      setFormStatus({
-        type: "success",
+        toast.success("Account created! Please sign in.");
+        setFormStatus({
+          type: "success",
           message: "Account created! Please sign in.",
-      });
+        });
       }
     } catch (error) {
       console.error(error);
+      toast.error(
+        "Something went wrong while creating your account. Please try again."
+      );
       setFormStatus({
         type: "error",
         message:
@@ -137,20 +208,44 @@ export default function SignUpPage() {
     setFormStatus(null);
     try {
       // For OAuth providers, signIn redirects automatically
-      await signIn("google", { 
+      await signIn("google", {
         callbackUrl: "/dashboard",
-        redirect: true 
+        redirect: true,
       });
     } catch (error) {
       console.error("Google sign-in error:", error);
       setFormStatus({
         type: "error",
-        message: "Failed to sign in with Google. Please check your credentials and try again.",
+        message:
+          "Failed to sign in with Google. Please check your credentials and try again.",
       });
     }
   };
 
-  const onInvalid = () => {
+  const onInvalid = (errors: FieldErrors<SignUpValues>) => {
+    submitAttemptedRef.current = true;
+
+    // Show toast for the first validation error found
+    const errorMessages = [
+      errors.fullName?.message,
+      errors.email?.message,
+      errors.userType?.message,
+      errors.password?.message,
+      errors.confirmPassword?.message,
+    ].filter(Boolean) as string[];
+
+    if (errorMessages.length > 0) {
+      // Show the first error message in a toast
+      toast.error(errorMessages[0], {
+        duration: 4000,
+      });
+    } else {
+      // Fallback message if no specific error message found
+      toast.error("Please fix the highlighted errors to continue.", {
+        duration: 4000,
+      });
+    }
+
     setFormStatus({
       type: "error",
       message: "Please fix the highlighted errors to continue.",
@@ -215,6 +310,7 @@ export default function SignUpPage() {
         <form
           onSubmit={handleSubmit(onSubmit, onInvalid)}
           className="space-y-5"
+          noValidate
         >
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -270,6 +366,59 @@ export default function SignUpPage() {
             )}
           </motion.div>
 
+          {/* User Type Selection */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.45 }}
+          >
+            <label className="block text-sm font-medium text-slate-200 mb-3">
+              I am a...
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <motion.button
+                type="button"
+                onClick={() => {
+                  setSelectedUserType("job_seeker");
+                  setValue("userType", "job_seeker");
+                }}
+                className={`relative rounded-xl border-2 p-4 text-sm font-medium transition-all ${
+                  selectedUserType === "job_seeker"
+                    ? "border-blue-500 bg-blue-500/20 text-white shadow-lg shadow-blue-500/20"
+                    : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
+                }`}
+              >
+                <div className="text-2xl mb-2">👤</div>
+                <div>Job Seeker</div>
+                <div className="text-xs mt-1 opacity-70">
+                  Looking for opportunities
+                </div>
+              </motion.button>
+              <motion.button
+                type="button"
+                onClick={() => {
+                  setSelectedUserType("employer");
+                  setValue("userType", "employer");
+                }}
+                className={`relative rounded-xl border-2 p-4 text-sm font-medium transition-all ${
+                  selectedUserType === "employer"
+                    ? "border-blue-500 bg-blue-500/20 text-white shadow-lg shadow-blue-500/20"
+                    : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
+                }`}
+              >
+                <div className="text-2xl mb-2">🏢</div>
+                <div>Employer</div>
+                <div className="text-xs mt-1 opacity-70">Hiring talent</div>
+              </motion.button>
+            </div>
+            <input type="hidden" {...register("userType")} />
+            {errors.userType && (
+              <p className="mt-2 text-xs text-rose-200" role="alert">
+                {errors.userType.message}
+              </p>
+            )}
+          </motion.div>
+
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -281,6 +430,10 @@ export default function SignUpPage() {
             >
               Password
             </label>
+            <p className="mt-1 text-xs text-slate-400">
+              Must be at least 8 characters with 1 uppercase, 1 lowercase, and 1
+              special character
+            </p>
             <div className="relative mt-2">
               <input
                 id="password"
@@ -379,6 +532,11 @@ export default function SignUpPage() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             disabled={isSubmitting}
+            onClick={async () => {
+              submitAttemptedRef.current = true;
+              // Manually trigger validation to ensure errors are populated
+              await trigger();
+            }}
             className="relative w-full overflow-hidden rounded-xl bg-linear-to-r from-[#2563EB] to-[#9333EA] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/40 transition focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting ? "Creating Account..." : "Create Account"}
@@ -390,7 +548,9 @@ export default function SignUpPage() {
             <div className="w-full border-t border-white/10"></div>
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-slate-900/70 px-2 text-slate-400">Or continue with</span>
+            <span className="bg-slate-900/70 px-2 text-slate-400">
+              Or continue with
+            </span>
           </div>
         </div>
 

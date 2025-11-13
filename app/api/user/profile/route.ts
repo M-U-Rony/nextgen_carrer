@@ -50,14 +50,26 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { skills, preferredTrack, education, experienceLevel } = body;
+    const { skills, preferredTrack, education, experienceLevel, companyName, companyWebsite, companyDescription } = body;
 
-    // Build update object
+    // Get user to check userType
+    const existingUser = await User.findOne({ email: session.user.email });
+    if (!existingUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Build update object based on user type
     const updateData: any = {};
-    if (skills !== undefined) updateData.skills = skills;
-    if (preferredTrack !== undefined) updateData.preferredTrack = preferredTrack;
-    if (education !== undefined) updateData.education = education;
-    if (experienceLevel !== undefined) updateData.experienceLevel = experienceLevel;
+    if (existingUser.userType === "employer") {
+      if (companyName !== undefined) updateData.companyName = companyName;
+      if (companyWebsite !== undefined) updateData.companyWebsite = companyWebsite;
+      if (companyDescription !== undefined) updateData.companyDescription = companyDescription;
+    } else {
+      if (skills !== undefined) updateData.skills = skills;
+      if (preferredTrack !== undefined) updateData.preferredTrack = preferredTrack;
+      if (education !== undefined) updateData.education = education;
+      if (experienceLevel !== undefined) updateData.experienceLevel = experienceLevel;
+    }
 
     const user = await User.findOneAndUpdate(
       { email: session.user.email },

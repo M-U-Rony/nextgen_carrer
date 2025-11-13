@@ -215,7 +215,7 @@ export default function JobDetailsPage() {
           </div>
         </motion.article>
       </section>
-    </main>
+    </motion.main>
   );
 }
 

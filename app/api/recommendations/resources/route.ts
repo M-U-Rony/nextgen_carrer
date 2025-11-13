@@ -34,9 +34,9 @@ export async function GET(request: NextRequest) {
     const resourcesWithScores = allResources.map((resource) => {
       // Calculate skill overlap
       const resourceSkills = resource.relatedSkills || [];
-      const matchedSkills = resourceSkills.filter((skill) =>
+      const matchedSkills = resourceSkills.filter((skill: string) =>
         userSkills.some(
-          (userSkill) =>
+          (userSkill: string) =>
             userSkill.toLowerCase() === skill.toLowerCase() ||
             userSkill.toLowerCase().includes(skill.toLowerCase()) ||
             skill.toLowerCase().includes(userSkill.toLowerCase())
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
 
       // Track match bonus (if resource skills relate to user's track)
       const trackMatch = preferredTrack
-        ? resourceSkills.some((skill) =>
+        ? resourceSkills.some((skill: string) =>
             preferredTrack.toLowerCase().includes(skill.toLowerCase())
           ) || resource.title.toLowerCase().includes(preferredTrack.toLowerCase())
         : false;

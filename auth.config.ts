@@ -43,6 +43,7 @@ export const authConfig = {
             name: user.name,
             email: user.email,
             image: user.image,
+            userType: user.userType,
           };
         } catch (error) {
           console.error("Authorization error:", error);
@@ -71,12 +72,13 @@ export const authConfig = {
           const existingUser = await User.findOne({ email: user.email });
 
           if (!existingUser) {
-            // Create new user for Google sign-in
+            // Create new user for Google sign-in (default to job_seeker)
             await User.create({
               name: user.name || "User",
               email: user.email,
               image: user.image || undefined,
               emailVerified: new Date(),
+              userType: "job_seeker", // Default for Google OAuth
             });
           } else {
             // Update user data if needed
@@ -104,6 +106,28 @@ export const authConfig = {
         token.email = user.email || token.email || "";
         token.name = user.name || token.name || "";
         token.picture = user.image || token.picture || "";
+        // Set userType from user object if available (from credentials provider)
+        if (user.userType) {
+          token.userType = user.userType;
+        }
+      }
+
+      // Always ensure userType is set by fetching from database if missing
+      if (!token.userType && token.email) {
+        try {
+          await connectDB();
+          const dbUser = await User.findOne({ email: token.email });
+          if (dbUser?.userType) {
+            token.userType = dbUser.userType;
+          } else {
+            // Default to job_seeker if not set
+            token.userType = "job_seeker";
+          }
+        } catch (error) {
+          console.error("Error fetching userType in JWT callback:", error);
+          // Default to job_seeker on error
+          token.userType = "job_seeker";
+        }
       }
 
       // For Google OAuth, fetch user from database after first sign-in
@@ -119,6 +143,10 @@ export const authConfig = {
             }
             if (!token.picture && dbUser.image) {
               token.picture = dbUser.image;
+            }
+            // Always update userType from database for Google OAuth
+            if (dbUser.userType) {
+              token.userType = dbUser.userType;
             }
           }
         } catch (error) {
@@ -141,6 +169,27 @@ export const authConfig = {
         if (token.email) session.user.email = token.email as string;
         if (token.name) session.user.name = token.name as string;
         if (token.picture) session.user.image = token.picture as string;
+        
+        // Always ensure userType is set in session
+        if (token.userType) {
+          session.user.userType = token.userType as "job_seeker" | "employer";
+        } else if (token.email) {
+          // Fallback: fetch userType from database if not in token
+          try {
+            await connectDB();
+            const dbUser = await User.findOne({ email: token.email });
+            if (dbUser?.userType) {
+              session.user.userType = dbUser.userType;
+            } else {
+              session.user.userType = "job_seeker"; // Default fallback
+            }
+          } catch (error) {
+            console.error("Error fetching userType in session callback:", error);
+            session.user.userType = "job_seeker"; // Default fallback on error
+          }
+        } else {
+          session.user.userType = "job_seeker"; // Default fallback
+        }
       }
 
       return session;

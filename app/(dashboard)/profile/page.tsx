@@ -72,11 +72,16 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Form state
+  // Form state - Job Seeker
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [preferredTrack, setPreferredTrack] = useState("");
   const [education, setEducation] = useState("");
   const [experienceLevel, setExperienceLevel] = useState("");
+
+  // Form state - Employer
+  const [companyName, setCompanyName] = useState("");
+  const [companyWebsite, setCompanyWebsite] = useState("");
+  const [companyDescription, setCompanyDescription] = useState("");
 
   useEffect(() => {
     if (status === "loading") return;
@@ -97,10 +102,17 @@ export default function ProfilePage() {
 
       if (response.ok && data.user) {
         setUser(data.user);
-        setSelectedSkills(data.user.skills || []);
-        setPreferredTrack(data.user.preferredTrack || "");
-        setEducation(data.user.education || "");
-        setExperienceLevel(data.user.experienceLevel || "");
+        // Set form state based on user type
+        if (data.user.userType === "employer") {
+          setCompanyName(data.user.companyName || "");
+          setCompanyWebsite(data.user.companyWebsite || "");
+          setCompanyDescription(data.user.companyDescription || "");
+        } else {
+          setSelectedSkills(data.user.skills || []);
+          setPreferredTrack(data.user.preferredTrack || "");
+          setEducation(data.user.education || "");
+          setExperienceLevel(data.user.experienceLevel || "");
+        }
       }
     } catch (error) {
       console.error("Error fetching user profile:", error);
@@ -111,9 +123,7 @@ export default function ProfilePage() {
 
   const toggleSkill = (skill: string) => {
     setSelectedSkills((prev) =>
-      prev.includes(skill)
-        ? prev.filter((s) => s !== skill)
-        : [...prev, skill]
+      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]
     );
   };
 
@@ -122,17 +132,26 @@ export default function ProfilePage() {
       setSaving(true);
       setSuccessMessage(null);
 
+      const updateData =
+        user?.userType === "employer"
+          ? {
+              companyName,
+              companyWebsite,
+              companyDescription,
+            }
+          : {
+              skills: selectedSkills,
+              preferredTrack,
+              education,
+              experienceLevel,
+            };
+
       const response = await fetch("/api/user/profile", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          skills: selectedSkills,
-          preferredTrack,
-          education,
-          experienceLevel,
-        }),
+        body: JSON.stringify(updateData),
       });
 
       const data = await response.json();
@@ -157,7 +176,9 @@ export default function ProfilePage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10 flex items-center justify-center`}>
+      <div
+        className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10 flex items-center justify-center`}
+      >
         <div className="text-center">
           <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
           <p>Loading...</p>
@@ -222,105 +243,182 @@ export default function ProfilePage() {
           animate="visible"
           className="rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur"
         >
-          {/* Preferred Track */}
-          <div className="mb-8">
-            <label
-              className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
-            >
-              Preferred Career Track
-            </label>
-            <select
-              value={preferredTrack}
-              onChange={(e) => setPreferredTrack(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-            >
-              <option value="">Select a track...</option>
-              {availableTracks.map((track) => (
-                <option key={track} value={track}>
-                  {track}
-                </option>
-              ))}
-            </select>
-            <p className="mt-2 text-sm text-slate-400">
-              This helps us recommend relevant jobs and learning resources
-            </p>
-          </div>
+          {user?.userType === "employer" ? (
+            // Employer Profile Form
+            <>
+              {/* Company Name */}
+              <div className="mb-8">
+                <label
+                  className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
+                >
+                  Company Name *
+                </label>
+                <input
+                  type="text"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="e.g., TechNova Labs"
+                  className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                />
+                <p className="mt-2 text-sm text-slate-400">
+                  Your company or organization name
+                </p>
+              </div>
 
-          {/* Experience Level */}
-          <div className="mb-8">
-            <label
-              className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
-            >
-              Experience Level
-            </label>
-            <select
-              value={experienceLevel}
-              onChange={(e) => setExperienceLevel(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-            >
-              <option value="">Select experience level...</option>
-              {experienceLevels.map((level) => (
-                <option key={level} value={level}>
-                  {level}
-                </option>
-              ))}
-            </select>
-          </div>
+              {/* Company Website */}
+              <div className="mb-8">
+                <label
+                  className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
+                >
+                  Company Website
+                </label>
+                <input
+                  type="url"
+                  value={companyWebsite}
+                  onChange={(e) => setCompanyWebsite(e.target.value)}
+                  placeholder="https://yourcompany.com"
+                  className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                />
+                <p className="mt-2 text-sm text-slate-400">
+                  Your company website URL
+                </p>
+              </div>
 
-          {/* Education */}
-          <div className="mb-8">
-            <label
-              className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
-            >
-              Education
-            </label>
-            <input
-              type="text"
-              value={education}
-              onChange={(e) => setEducation(e.target.value)}
-              placeholder="e.g., BSc in Computer Science"
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-            />
-          </div>
+              {/* Company Description */}
+              <div className="mb-8">
+                <label
+                  className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
+                >
+                  Company Description
+                </label>
+                <textarea
+                  value={companyDescription}
+                  onChange={(e) => setCompanyDescription(e.target.value)}
+                  placeholder="Tell us about your company, its mission, and what makes it unique..."
+                  rows={5}
+                  className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-none"
+                />
+                <p className="mt-2 text-sm text-slate-400">
+                  A brief description of your company
+                </p>
+              </div>
+            </>
+          ) : (
+            // Job Seeker Profile Form
+            <>
+              {/* Preferred Track */}
+              <div className="mb-8">
+                <label
+                  className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
+                >
+                  Preferred Career Track
+                </label>
+                <select
+                  value={preferredTrack}
+                  onChange={(e) => setPreferredTrack(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
+                >
+                  <option value="" className="bg-slate-900 text-slate-400">
+                    Select a track...
+                  </option>
+                  {availableTracks.map((track) => (
+                    <option
+                      key={track}
+                      value={track}
+                      className="bg-slate-900 text-white"
+                    >
+                      {track}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-2 text-sm text-slate-400">
+                  This helps us recommend relevant jobs and learning resources
+                </p>
+              </div>
 
-          {/* Skills Selection */}
-          <div className="mb-8">
-            <label
-              className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
-            >
-              Your Skills ({selectedSkills.length} selected)
-            </label>
-            <p className="mb-4 text-sm text-slate-400">
-              Select all skills that apply to you. This helps us match you with
-              relevant opportunities.
-            </p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-              {availableSkills.map((skill) => {
-                const isSelected = selectedSkills.includes(skill);
-                return (
-                  <motion.button
-                    key={skill}
-                    type="button"
-                    onClick={() => toggleSkill(skill)}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
-                      isSelected
-                        ? "border-blue-400/50 bg-blue-500/20 text-blue-200"
-                        : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
-                    }`}
-                  >
-                    {isSelected ? (
-                      <Check className="h-4 w-4" />
-                    ) : (
-                      <X className="h-4 w-4 opacity-50" />
-                    )}
-                    {skill}
-                  </motion.button>
-                );
-              })}
-            </div>
-          </div>
+              {/* Experience Level */}
+              <div className="mb-8">
+                <label
+                  className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
+                >
+                  Experience Level
+                </label>
+                <select
+                  value={experienceLevel}
+                  onChange={(e) => setExperienceLevel(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
+                >
+                  <option value="" className="bg-slate-900 text-slate-400">
+                    Select experience level...
+                  </option>
+                  {experienceLevels.map((level) => (
+                    <option
+                      key={level}
+                      value={level}
+                      className="bg-slate-900 text-white"
+                    >
+                      {level}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Education */}
+              <div className="mb-8">
+                <label
+                  className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
+                >
+                  Education
+                </label>
+                <input
+                  type="text"
+                  value={education}
+                  onChange={(e) => setEducation(e.target.value)}
+                  placeholder="e.g., BSc in Computer Science"
+                  className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                />
+              </div>
+
+              {/* Skills Selection */}
+              <div className="mb-8">
+                <label
+                  className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
+                >
+                  Your Skills ({selectedSkills.length} selected)
+                </label>
+                <p className="mb-4 text-sm text-slate-400">
+                  Select all skills that apply to you. This helps us match you
+                  with relevant opportunities.
+                </p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                  {availableSkills.map((skill) => {
+                    const isSelected = selectedSkills.includes(skill);
+                    return (
+                      <motion.button
+                        key={skill}
+                        type="button"
+                        onClick={() => toggleSkill(skill)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                          isSelected
+                            ? "border-blue-400/50 bg-blue-500/20 text-blue-200"
+                            : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20"
+                        }`}
+                      >
+                        {isSelected ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <X className="h-4 w-4 opacity-50" />
+                        )}
+                        {skill}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Save Button */}
           <div className="flex items-center justify-end gap-4">
@@ -343,7 +441,6 @@ export default function ProfilePage() {
           </div>
         </motion.div>
       </section>
-    </main>
+    </motion.main>
   );
 }
-

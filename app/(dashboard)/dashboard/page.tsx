@@ -11,6 +11,7 @@ import { ExternalLink } from "lucide-react";
 import type { IJob } from "@/models/Job";
 import type { IResource } from "@/models/Resource";
 import type { IUser } from "@/models/User";
+import { useUserType } from "@/hooks/useUserType";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -28,22 +29,15 @@ const cardVariants = {
   }),
 };
 
-// Default user data (can be extended with database fields later)
+// Default user data - only used as fallback for display, not for new users
 const defaultUserData = {
-  education: "BSc in Computer Science",
-  experienceLevel: "Fresher",
-  preferredTrack: "Web Development",
-  skills: ["JavaScript", "React", "HTML", "CSS", "TailwindCSS", "TypeScript"],
-  profileCompletion: 72,
+  education: "",
+  experienceLevel: "",
+  preferredTrack: "",
+  skills: [],
+  profileCompletion: 0,
 };
 
-const skillsUsage = [
-  { label: "React", percent: 78, color: "from-blue-500 to-blue-400" },
-  { label: "TypeScript", percent: 65, color: "from-violet-500 to-purple-500" },
-  { label: "TailwindCSS", percent: 54, color: "from-sky-500 to-cyan-500" },
-  { label: "HTML", percent: 92, color: "from-orange-500 to-amber-500" },
-  { label: "CSS", percent: 88, color: "from-emerald-500 to-teal-500" },
-];
 
 const gradientBackground =
   "bg-[radial-gradient(circle_at_20%_20%,#2563EB22,transparent_55%),radial-gradient(circle_at_80%_0%,#9333EA22,transparent_60%),linear-gradient(115deg,#020617,#0f172a)]";
@@ -75,40 +69,8 @@ const DashboardPage: FC = () => {
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [loadingResources, setLoadingResources] = useState(true);
   const [userData, setUserData] = useState<IUser | null>(null);
-
-  const user = useMemo(() => {
-    if (userData) {
-      return {
-        name: userData.name || session?.user?.name || "User",
-        email: userData.email || session?.user?.email || "",
-        image:
-          userData.image ||
-          session?.user?.image ||
-          "https://i.pravatar.cc/120?img=5",
-        skills: userData.skills || defaultUserData.skills,
-        preferredTrack:
-          userData.preferredTrack || defaultUserData.preferredTrack,
-        education: userData.education || defaultUserData.education,
-        experienceLevel:
-          userData.experienceLevel || defaultUserData.experienceLevel,
-        profileCompletion: calculateProfileCompletion(userData),
-      };
-    }
-    if (session?.user) {
-      return {
-        name: session.user.name || "User",
-        email: session.user.email || "",
-        image: session.user.image || "https://i.pravatar.cc/120?img=5",
-        ...defaultUserData,
-      };
-    }
-    return {
-      name: "User",
-      email: "",
-      image: "https://i.pravatar.cc/120?img=5",
-      ...defaultUserData,
-    };
-  }, [session, userData]);
+  const [employerJobs, setEmployerJobs] = useState<IJob[]>([]);
+  const [loadingEmployerJobs, setLoadingEmployerJobs] = useState(true);
 
   const calculateProfileCompletion = (user: IUser | null): number => {
     if (!user) return 0;
@@ -124,6 +86,62 @@ const DashboardPage: FC = () => {
     return Math.round((completed / total) * 100);
   };
 
+  const user = useMemo(() => {
+    if (userData) {
+      return {
+        name: userData.name || session?.user?.name || "User",
+        email: userData.email || session?.user?.email || "",
+        image:
+          userData.image ||
+          session?.user?.image ||
+          "https://i.pravatar.cc/120?img=5",
+        skills: userData.skills || [],
+        preferredTrack: userData.preferredTrack || "",
+        education: userData.education || "",
+        experienceLevel: userData.experienceLevel || "",
+        profileCompletion: calculateProfileCompletion(userData),
+      };
+    }
+    if (session?.user) {
+      return {
+        name: session.user.name || "User",
+        email: session.user.email || "",
+        image: session.user.image || "https://i.pravatar.cc/120?img=5",
+        skills: [],
+        preferredTrack: "",
+        education: "",
+        experienceLevel: "",
+        profileCompletion: 0,
+      };
+    }
+    return {
+      name: "User",
+      email: "",
+      image: "https://i.pravatar.cc/120?img=5",
+      skills: [],
+      preferredTrack: "",
+      education: "",
+      experienceLevel: "",
+      profileCompletion: 0,
+    };
+  }, [session, userData]);
+
+  const userType = useUserType(userData);
+
+  const isProfileIncomplete = useMemo(() => {
+    if (userType === "employer") {
+      return !userData || !userData.companyName;
+    }
+    // Job seeker profile incomplete check
+    return (
+      !userData ||
+      !userData.skills ||
+      userData.skills.length === 0 ||
+      !userData.preferredTrack ||
+      !userData.experienceLevel
+    );
+  }, [userData, userType]);
+
   const skillsColumns = useMemo(() => {
     const midpoint = Math.ceil(user.skills.length / 2);
     return [user.skills.slice(0, midpoint), user.skills.slice(midpoint)];
@@ -133,10 +151,24 @@ const DashboardPage: FC = () => {
   useEffect(() => {
     if (session) {
       fetchUserProfile();
-      fetchRecommendedJobs();
-      fetchRecommendedResources();
+      // Only fetch recommendations for job seekers
+      if (session.user?.userType === "job_seeker" || !session.user?.userType) {
+        fetchRecommendedJobs();
+        fetchRecommendedResources();
+      }
+      // Fetch employer jobs for employers
+      if (session.user?.userType === "employer") {
+        fetchEmployerJobs();
+      }
     }
   }, [session]);
+
+  // Also fetch employer jobs when userData changes and user is employer
+  useEffect(() => {
+    if (userType === "employer" && userData) {
+      fetchEmployerJobs();
+    }
+  }, [userType, userData]);
 
   const fetchUserProfile = async () => {
     try {
@@ -180,6 +212,21 @@ const DashboardPage: FC = () => {
     }
   };
 
+  const fetchEmployerJobs = async () => {
+    try {
+      setLoadingEmployerJobs(true);
+      const response = await fetch("/api/jobs/my-jobs");
+      const data = await response.json();
+      if (response.ok) {
+        setEmployerJobs(data.jobs || []);
+      }
+    } catch (error) {
+      console.error("Error fetching employer jobs:", error);
+    } finally {
+      setLoadingEmployerJobs(false);
+    }
+  };
+
 
   if (status === "loading") {
     return (
@@ -205,6 +252,208 @@ const DashboardPage: FC = () => {
       className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10`}
     >
       <section className="mx-auto flex max-w-6xl flex-col gap-10">
+        {/* Profile Incomplete Banner */}
+        {isProfileIncomplete && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/20 to-orange-500/20 p-6 backdrop-blur"
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className={`${inter.className} mb-2 text-xl font-semibold text-white`}>
+                  Complete Your Profile
+                </h3>
+                <p className="text-sm text-slate-200">
+                  To get personalized job recommendations and learning resources, please fill out your profile with your skills, preferred career track, and experience level.
+                </p>
+              </div>
+              <Link href="/profile">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="whitespace-nowrap rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:shadow-xl"
+                >
+                  Complete Profile
+                </motion.button>
+              </Link>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Conditional Rendering Based on User Type */}
+        {userType === "employer" ? (
+          // Employer Dashboard
+          <>
+            <motion.div
+              variants={cardVariants}
+              initial="hidden"
+              animate="visible"
+              custom={0}
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur lg:p-8"
+            >
+              <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="relative h-20 w-20 overflow-hidden rounded-2xl border border-white/15 bg-linear-to-br from-blue-400/40 to-purple-500/20 p-[2px]">
+                    <Image
+                      src={user.image}
+                      alt={user.name}
+                      fill
+                      className="rounded-2xl object-cover"
+                      sizes="80px"
+                    />
+                  </div>
+                  <div>
+                    <h2 className={`${inter.className} text-xl font-semibold text-white sm:text-2xl`}>
+                      {userData?.companyName || user.name}
+                    </h2>
+                    <p className="text-sm text-slate-300">{user.email}</p>
+                    {userData?.companyWebsite && (
+                      <a
+                        href={userData.companyWebsite}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-400 hover:text-blue-300"
+                      >
+                        {userData.companyWebsite}
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <Link href="/profile">
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="inline-flex items-center justify-center rounded-xl bg-linear-to-r from-[#2563EB] to-[#9333EA] px-4 py-2 text-sm font-semibold shadow-lg shadow-blue-900/40 transition"
+                  >
+                    Edit Profile
+                  </motion.button>
+                </Link>
+              </div>
+
+              {userData?.companyDescription && (
+                <div className="mt-6">
+                  <p className="text-sm text-slate-300">{userData.companyDescription}</p>
+                </div>
+              )}
+
+              <div className="mt-6">
+                <Link href="/jobs/post">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:shadow-xl"
+                  >
+                    + Post New Job
+                  </motion.button>
+                </Link>
+              </div>
+            </motion.div>
+
+            <motion.section
+              variants={cardVariants}
+              initial="hidden"
+              animate="visible"
+              custom={1}
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur lg:p-8"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className={`${inter.className} text-lg font-semibold text-white`}>
+                    Your Posted Jobs
+                  </h3>
+                  <p className="text-sm text-slate-300">
+                    Manage and track your job postings ({employerJobs.length})
+                  </p>
+                </div>
+                <Link
+                  href="/jobs"
+                  className="text-sm text-blue-300 transition hover:text-blue-200"
+                >
+                  View all jobs →
+                </Link>
+              </div>
+
+              {loadingEmployerJobs ? (
+                <div className="mt-6 flex items-center justify-center py-12">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
+                </div>
+              ) : employerJobs.length === 0 ? (
+                <div className="mt-6 rounded-xl border border-white/10 bg-slate-900/70 p-8 text-center">
+                  <p className="text-slate-300">No jobs posted yet</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Start posting jobs to find the right talent for your company
+                  </p>
+                  <Link href="/jobs/post">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="mt-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:shadow-xl"
+                    >
+                      Post Your First Job
+                    </motion.button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {employerJobs.slice(0, 6).map((job, index) => (
+                    <motion.article
+                      key={job._id}
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.45, delay: index * 0.1 }}
+                      className="flex flex-col rounded-2xl border border-white/10 bg-slate-900/70 p-5 shadow-lg shadow-blue-950/20 transition hover:border-white/20"
+                    >
+                      <header>
+                        <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                          {job.company}
+                        </p>
+                        <h4
+                          className={`${inter.className} mt-2 text-lg font-semibold text-white`}
+                        >
+                          {job.title}
+                        </h4>
+                        <p className="mt-1 text-sm text-slate-300">
+                          {job.jobType} • {job.location}
+                        </p>
+                      </header>
+                      <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-200">
+                        {job.requiredSkills?.slice(0, 3).map((skill) => (
+                          <span
+                            key={skill}
+                            className="rounded-full bg-white/10 px-3 py-1"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                        {job.requiredSkills && job.requiredSkills.length > 3 && (
+                          <span className="rounded-full bg-white/10 px-3 py-1 text-slate-400">
+                            +{job.requiredSkills.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+                        <span>{job.track}</span>
+                        <span>{job.experienceLevel}</span>
+                      </div>
+                      <Link href={`/jobs/${job._id}`}>
+                        <motion.button
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className="mt-5 w-full inline-flex items-center justify-center rounded-xl border border-white/20 px-4 py-2 text-sm font-medium text-white transition hover:border-white/40"
+                        >
+                          View Details
+                        </motion.button>
+                      </Link>
+                    </motion.article>
+                  ))}
+                </div>
+              )}
+            </motion.section>
+          </>
+        ) : (
+          // Job Seeker Dashboard (existing content)
+          <>
         <motion.div
           variants={cardVariants}
           initial="hidden"
@@ -249,19 +498,31 @@ const DashboardPage: FC = () => {
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Education
                 </p>
-                <p className="mt-1">{user.education || "Not set"}</p>
+                <p className="mt-1">
+                  {user.education || (
+                    <span className="text-slate-500 italic">Not set - Please update your profile</span>
+                  )}
+                </p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Experience Level
                 </p>
-                <p className="mt-1">{user.experienceLevel || "Not set"}</p>
+                <p className="mt-1">
+                  {user.experienceLevel || (
+                    <span className="text-slate-500 italic">Not set - Please update your profile</span>
+                  )}
+                </p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
                   Preferred Track
                 </p>
-                <p className="mt-1">{user.preferredTrack || "Not set"}</p>
+                <p className="mt-1">
+                  {user.preferredTrack || (
+                    <span className="text-slate-500 italic">Not set - Please update your profile</span>
+                  )}
+                </p>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
@@ -298,45 +559,38 @@ const DashboardPage: FC = () => {
               </Link>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {skillsColumns.map((column, columnIndex) => (
-                <div
-                  key={`column-${columnIndex}`}
-                  className="flex flex-wrap gap-2"
-                >
-                  {column.map((skill: string) => (
-                    <span
-                      key={skill}
-                      className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/90"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-white/10 bg-slate-900/70 p-5">
-              <h4 className="text-sm font-semibold text-white/90">
-                Top Skill Usage
-              </h4>
-              <div className="mt-4 space-y-3">
-                {skillsUsage.map((skill) => (
-                  <div key={skill.label}>
-                    <div className="flex items-center justify-between text-xs text-slate-300">
-                      <span>{skill.label}</span>
-                      <span>{skill.percent}%</span>
-                    </div>
-                    <div className="mt-2 h-2 rounded-full bg-white/10">
-                      <div
-                        className={`h-2 rounded-full bg-linear-to-r ${skill.color}`}
-                        style={{ width: `${skill.percent}%` }}
-                      />
-                    </div>
+            {user.skills.length > 0 ? (
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {skillsColumns.map((column, columnIndex) => (
+                  <div
+                    key={`column-${columnIndex}`}
+                    className="flex flex-wrap gap-2"
+                  >
+                    {column.map((skill: string) => (
+                      <span
+                        key={skill}
+                        className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/90"
+                      >
+                        {skill}
+                      </span>
+                    ))}
                   </div>
                 ))}
               </div>
-            </div>
+            ) : (
+              <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-6 text-center">
+                <p className="text-sm text-slate-400">
+                  No skills added yet.{" "}
+                  <Link
+                    href="/profile"
+                    className="text-blue-400 transition hover:text-blue-300 underline"
+                  >
+                    Add your skills
+                  </Link>{" "}
+                  to get personalized recommendations.
+                </p>
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -607,6 +861,8 @@ const DashboardPage: FC = () => {
             </motion.button>
           </div>
         </motion.section>
+          </>
+        )}
       </section>
     </motion.div>
   );

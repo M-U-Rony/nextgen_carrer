@@ -13,6 +13,7 @@ export interface IJob {
   salary?: string;
   applicationLink?: string;
   postedDate?: Date;
+  employerId?: string; // ID of the employer who posted this job
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -69,6 +70,10 @@ const JobSchema = new Schema<IJob>(
     postedDate: {
       type: Date,
       default: Date.now,
+    },
+    employerId: {
+      type: String,
+      trim: true,
     },
   },
   {

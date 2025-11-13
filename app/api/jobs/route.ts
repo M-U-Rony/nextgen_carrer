@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Job from "@/models/Job";
+import User from "@/models/User";
+import { auth } from "@/auth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,6 +50,105 @@ export async function GET(request: NextRequest) {
     console.error("Error fetching jobs:", error);
     return NextResponse.json(
       { error: "Failed to fetch jobs" },
+      { status: 500 }
+    );
+  }
+}
+
+// POST - Create a new job (employers only)
+export async function POST(request: NextRequest) {
+  try {
+    await connectDB();
+
+    const session = await auth();
+
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // Check if user is an employer
+    const user = await User.findOne({ email: session.user.email });
+    if (!user || user.userType !== "employer") {
+      return NextResponse.json(
+        { error: "Only employers can post jobs" },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const {
+      title,
+      company,
+      location,
+      requiredSkills,
+      experienceLevel,
+      jobType,
+      track,
+      description,
+      salary,
+      applicationLink,
+    } = body;
+
+    // Validate required fields
+    if (!title || !company || !location || !requiredSkills || !experienceLevel || !jobType || !track || !description) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    // Validate requiredSkills is an array and not empty
+    const skillsArray = Array.isArray(requiredSkills) ? requiredSkills : [requiredSkills];
+    if (skillsArray.length === 0 || skillsArray.every((skill: string) => !skill || skill.trim() === "")) {
+      return NextResponse.json(
+        { error: "At least one skill is required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate experienceLevel
+    if (!["Fresher", "Junior", "Mid"].includes(experienceLevel)) {
+      return NextResponse.json(
+        { error: "Invalid experience level" },
+        { status: 400 }
+      );
+    }
+
+    // Validate jobType
+    if (!["Internship", "Part-time", "Full-time", "Freelance"].includes(jobType)) {
+      return NextResponse.json(
+        { error: "Invalid job type" },
+        { status: 400 }
+      );
+    }
+
+    // Create job
+    const job = await Job.create({
+      title: title.trim(),
+      company: (company || user.companyName || user.name).trim(),
+      location: location.trim(),
+      requiredSkills: skillsArray.filter((skill: string) => skill && skill.trim() !== "").map((skill: string) => skill.trim()),
+      experienceLevel,
+      jobType,
+      track: track.trim(),
+      description: description.trim(),
+      salary: salary?.trim() || undefined,
+      applicationLink: applicationLink?.trim() || undefined,
+      employerId: user._id.toString(),
+      postedDate: new Date(),
+    });
+
+    return NextResponse.json(
+      { message: "Job posted successfully", job },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Error posting job:", error);
+    return NextResponse.json(
+      { error: "Failed to post job" },
       { status: 500 }
     );
   }

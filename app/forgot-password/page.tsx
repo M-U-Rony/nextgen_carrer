@@ -7,7 +7,9 @@ import { Inter } from "next/font/google";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Mail } from "lucide-react";
+import { ArrowLeft, Mail, Eye, EyeOff } from "lucide-react";
+import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -23,20 +25,42 @@ const forgotPasswordSchema = z.object({
   email: z.string().email("Enter a valid email address"),
 });
 
+const resetPasswordSchema = z
+  .object({
+    newPassword: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+      .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+      .regex(
+        /[^a-zA-Z0-9]/,
+        "Password must contain at least one special character"
+      ),
+    confirmPassword: z.string().min(8, "Confirm your password"),
+  })
+  .refine((values) => values.newPassword === values.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
 type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
+type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
   const [formStatus, setFormStatus] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [email, setEmail] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-    reset,
+    watch,
   } = useForm<ForgotPasswordValues>({
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: {
@@ -45,21 +69,72 @@ export default function ForgotPasswordPage() {
     mode: "onBlur",
   });
 
+  const {
+    register: registerReset,
+    handleSubmit: handleSubmitReset,
+    formState: { errors: resetErrors, isSubmitting: isResetting },
+  } = useForm<ResetPasswordValues>({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: {
+      newPassword: "",
+      confirmPassword: "",
+    },
+    mode: "onSubmit",
+  });
+
   const onSubmit: SubmitHandler<ForgotPasswordValues> = async (values) => {
+    setEmail(values.email);
+    setFormStatus({
+      type: "success",
+      message: "You can now reset your password.",
+    });
+  };
+
+  const onResetPassword: SubmitHandler<ResetPasswordValues> = async (values) => {
+    if (!email) {
+      toast.error("Please enter your email first");
+      return;
+    }
+
     setFormStatus(null);
     try {
-      console.log("Reset password requested for:", values.email);
-      reset();
-      setIsSubmitted(true);
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          newPassword: values.newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast.error(data.error || "Failed to reset password");
+        setFormStatus({
+          type: "error",
+          message: data.error || "Failed to reset password",
+        });
+        return;
+      }
+
+      toast.success("Password reset successfully!");
       setFormStatus({
         type: "success",
-        message: "If an account exists with this email, you'll receive password reset instructions shortly.",
+        message: "Password reset successfully! Redirecting to sign in...",
       });
+
+      setTimeout(() => {
+        router.push("/signin");
+      }, 2000);
     } catch (error) {
       console.error(error);
+      toast.error("Failed to reset password. Please try again.");
       setFormStatus({
         type: "error",
-        message: "Something went wrong. Please try again later.",
+        message: "Failed to reset password. Please try again.",
       });
     }
   };
@@ -119,8 +194,7 @@ export default function ForgotPasswordPage() {
             Forgot Password?
           </h1>
           <p className="mt-3 text-sm text-slate-300">
-            No worries! Enter your email address and we&rsquo;ll send you a link
-            to reset your password.
+            {!email ? "Enter your email address and new password to reset." : "Enter your new password below."}
           </p>
         </div>
 
@@ -139,7 +213,7 @@ export default function ForgotPasswordPage() {
           </motion.div>
         )}
 
-        {!isSubmitted ? (
+        {!email && (
           <form
             onSubmit={handleSubmit(onSubmit, onInvalid)}
             className="space-y-5"
@@ -165,13 +239,6 @@ export default function ForgotPasswordPage() {
                   size={18}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
                 />
-                <motion.span
-                  className="pointer-events-none absolute inset-0 rounded-xl border border-blue-500/30"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 0 }}
-                  whileFocus={{ opacity: 1 }}
-                  transition={{ duration: 0.3 }}
-                />
               </div>
               {errors.email && (
                 <p className="mt-2 text-xs text-rose-200" role="alert">
@@ -187,28 +254,108 @@ export default function ForgotPasswordPage() {
               disabled={isSubmitting}
               className="relative w-full overflow-hidden rounded-xl bg-linear-to-r from-[#2563EB] to-[#9333EA] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/40 transition focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isSubmitting ? "Sending..." : "Send Reset Link"}
+              {isSubmitting ? "Continue..." : "Continue"}
             </motion.button>
           </form>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-4"
+        )}
+
+        {email && (
+          <form
+            onSubmit={handleSubmitReset(onResetPassword)}
+            className="space-y-5"
           >
-            <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-6 text-center">
-              <Mail size={32} className="mx-auto mb-3 text-emerald-300" />
-              <p className="text-sm text-emerald-100">
-                Check your inbox for password reset instructions.
+            <div>
+              <label
+                htmlFor="newPassword"
+                className="block text-sm font-medium text-slate-200"
+              >
+                New Password
+              </label>
+              <p className="mt-1 text-xs text-slate-400">
+                Must be at least 8 characters with 1 uppercase, 1 lowercase, and 1
+                special character
               </p>
+              <div className="relative mt-2">
+                <input
+                  id="newPassword"
+                  type={showPassword ? "text" : "password"}
+                  {...registerReset("newPassword")}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pr-11 text-sm text-white shadow-inner transition focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-2 focus:ring-offset-slate-900"
+                  placeholder="••••••••"
+                />
+                <motion.button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition hover:text-white"
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} className="text-slate-300" />
+                  ) : (
+                    <Eye size={18} className="text-slate-300" />
+                  )}
+                </motion.button>
+              </div>
+              {resetErrors.newPassword && (
+                <p className="mt-2 text-xs text-rose-200" role="alert">
+                  {resetErrors.newPassword.message}
+                </p>
+              )}
             </div>
-            <Link
-              href="/signin"
-              className="block w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-center text-sm font-medium text-white transition hover:border-white/40 hover:bg-white/10"
+
+            <div>
+              <label
+                htmlFor="confirmPassword"
+                className="block text-sm font-medium text-slate-200"
+              >
+                Confirm Password
+              </label>
+              <div className="relative mt-2">
+                <input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  {...registerReset("confirmPassword")}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 pr-11 text-sm text-white shadow-inner transition focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:ring-offset-2 focus:ring-offset-slate-900"
+                  placeholder="••••••••"
+                />
+                <motion.button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition hover:text-white"
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff size={18} className="text-slate-300" />
+                  ) : (
+                    <Eye size={18} className="text-slate-300" />
+                  )}
+                </motion.button>
+              </div>
+              {resetErrors.confirmPassword && (
+                <p className="mt-2 text-xs text-rose-200" role="alert">
+                  {resetErrors.confirmPassword.message}
+                </p>
+              )}
+            </div>
+
+            <motion.button
+              type="submit"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              disabled={isResetting}
+              className="relative w-full overflow-hidden rounded-xl bg-linear-to-r from-[#2563EB] to-[#9333EA] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/40 transition focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              Return to Sign In
-            </Link>
-          </motion.div>
+              {isResetting ? "Resetting..." : "Reset Password"}
+            </motion.button>
+            <motion.button
+              type="button"
+              onClick={() => {
+                setEmail("");
+                setFormStatus(null);
+              }}
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10"
+            >
+              Change Email
+            </motion.button>
+          </form>
         )}
 
         <p className="mt-8 text-center text-sm text-slate-300">

@@ -3,10 +3,22 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { Inter } from "next/font/google";
-import { Search, MapPin, Briefcase, Filter, X } from "lucide-react";
+import {
+  Search,
+  MapPin,
+  Briefcase,
+  Filter,
+  X,
+  Edit,
+  Trash2,
+  Plus,
+} from "lucide-react";
 import type { IJob } from "@/models/Job";
+import type { IUser } from "@/models/User";
+import { useUserType } from "@/hooks/useUserType";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -29,8 +41,10 @@ const gradientBackground =
 
 export default function JobsPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [jobs, setJobs] = useState<IJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState<IUser | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState({
     track: "all",
@@ -39,6 +53,9 @@ export default function JobsPage() {
     experienceLevel: "all",
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+
+  const userType = useUserType(userData);
 
   // Get unique values for filter options
   const uniqueTracks = useMemo(() => {
@@ -52,28 +69,85 @@ export default function JobsPage() {
   }, [jobs]);
 
   useEffect(() => {
+    if (session) {
+      fetchUserProfile();
+    }
+  }, [session]);
+
+  useEffect(() => {
     fetchJobs();
-  }, [filters, searchQuery]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, searchQuery, userType]);
+
+  const fetchUserProfile = async () => {
+    try {
+      const response = await fetch("/api/user/profile");
+      const data = await response.json();
+      if (response.ok && data.user) {
+        setUserData(data.user);
+      }
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+    }
+  };
 
   const fetchJobs = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      
-      if (filters.track !== "all") params.append("track", filters.track);
-      if (filters.location !== "all") params.append("location", filters.location);
-      if (filters.jobType !== "all") params.append("jobType", filters.jobType);
-      if (filters.experienceLevel !== "all")
-        params.append("experienceLevel", filters.experienceLevel);
-      if (searchQuery) params.append("search", searchQuery);
 
-      const response = await fetch(`/api/jobs?${params.toString()}`);
-      const data = await response.json();
-      setJobs(data.jobs || []);
+      // If employer, fetch their own jobs
+      if (userType === "employer") {
+        const response = await fetch("/api/jobs/my-jobs");
+        const data = await response.json();
+        if (response.ok) {
+          setJobs(data.jobs || []);
+        }
+      } else {
+        // Job seekers see all jobs with filters
+        const params = new URLSearchParams();
+
+        if (filters.track !== "all") params.append("track", filters.track);
+        if (filters.location !== "all")
+          params.append("location", filters.location);
+        if (filters.jobType !== "all")
+          params.append("jobType", filters.jobType);
+        if (filters.experienceLevel !== "all")
+          params.append("experienceLevel", filters.experienceLevel);
+        if (searchQuery) params.append("search", searchQuery);
+
+        const response = await fetch(`/api/jobs?${params.toString()}`);
+        const data = await response.json();
+        setJobs(data.jobs || []);
+      }
     } catch (error) {
       console.error("Error fetching jobs:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteJob = async (jobId: string) => {
+    if (!confirm("Are you sure you want to delete this job posting?")) {
+      return;
+    }
+
+    try {
+      setDeletingJobId(jobId);
+      const response = await fetch(`/api/jobs/${jobId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setJobs((prev) => prev.filter((job) => job._id !== jobId));
+      } else {
+        const data = await response.json();
+        alert(data.error || "Failed to delete job");
+      }
+    } catch (error) {
+      console.error("Error deleting job:", error);
+      alert("Failed to delete job. Please try again.");
+    } finally {
+      setDeletingJobId(null);
     }
   };
 
@@ -108,147 +182,176 @@ export default function JobsPage() {
           animate="visible"
           className="mb-8"
         >
-          <h1
-            className={`${inter.className} mb-4 text-4xl font-bold sm:text-5xl`}
-          >
-            Jobs & Opportunities
-          </h1>
-          <p className="text-lg text-slate-300">
-            Discover your next career opportunity
-          </p>
-        </motion.div>
-
-        {/* Search Bar */}
-        <motion.div
-          variants={fadeIn}
-          initial="hidden"
-          animate="visible"
-          className="mb-6"
-        >
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search jobs by title, company, or skills..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-12 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-            />
+          <div className="flex items-center justify-between">
+            <div>
+              <h1
+                className={`${inter.className} mb-4 text-4xl font-bold sm:text-5xl`}
+              >
+                {userType === "employer"
+                  ? "My Job Postings"
+                  : "Jobs & Opportunities"}
+              </h1>
+              <p className="text-lg text-slate-300">
+                {userType === "employer"
+                  ? "Manage your job postings"
+                  : "Discover your next career opportunity"}
+              </p>
+            </div>
+            {userType === "employer" && (
+              <Link href="/jobs/post">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:shadow-xl"
+                >
+                  <Plus className="h-4 w-4" />
+                  Post Job
+                </motion.button>
+              </Link>
+            )}
           </div>
         </motion.div>
 
-        {/* Filter Toggle */}
-        <div className="mb-6 flex items-center justify-between">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium transition hover:bg-white/10"
-          >
-            <Filter className="h-4 w-4" />
-            Filters
-            {hasActiveFilters && (
-              <span className="ml-1 rounded-full bg-blue-500 px-2 py-0.5 text-xs">
-                Active
-              </span>
-            )}
-          </button>
-          {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className="flex items-center gap-2 text-sm text-slate-300 transition hover:text-white"
-            >
-              <X className="h-4 w-4" />
-              Clear all
-            </button>
-          )}
-        </div>
-
-        {/* Filter Panel */}
-        {showFilters && (
+        {/* Search Bar - Only for job seekers */}
+        {userType !== "employer" && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mb-8 rounded-xl border border-white/10 bg-white/5 p-6"
+            variants={fadeIn}
+            initial="hidden"
+            animate="visible"
+            className="mb-6"
           >
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Track
-                </label>
-                <select
-                  value={filters.track}
-                  onChange={(e) =>
-                    setFilters({ ...filters, track: e.target.value })
-                  }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                >
-                  <option value="all">All Tracks</option>
-                  {uniqueTracks.map((track) => (
-                    <option key={track} value={track}>
-                      {track}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Location
-                </label>
-                <select
-                  value={filters.location}
-                  onChange={(e) =>
-                    setFilters({ ...filters, location: e.target.value })
-                  }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                >
-                  <option value="all">All Locations</option>
-                  {uniqueLocations.map((location) => (
-                    <option key={location} value={location}>
-                      {location}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Job Type
-                </label>
-                <select
-                  value={filters.jobType}
-                  onChange={(e) =>
-                    setFilters({ ...filters, jobType: e.target.value })
-                  }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                >
-                  <option value="all">All Types</option>
-                  <option value="Internship">Internship</option>
-                  <option value="Part-time">Part-time</option>
-                  <option value="Full-time">Full-time</option>
-                  <option value="Freelance">Freelance</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Experience
-                </label>
-                <select
-                  value={filters.experienceLevel}
-                  onChange={(e) =>
-                    setFilters({ ...filters, experienceLevel: e.target.value })
-                  }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                >
-                  <option value="all">All Levels</option>
-                  <option value="Fresher">Fresher</option>
-                  <option value="Junior">Junior</option>
-                  <option value="Mid">Mid</option>
-                </select>
-              </div>
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search jobs by title, company, or skills..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-12 py-3 text-white placeholder:text-slate-400 focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              />
             </div>
           </motion.div>
+        )}
+
+        {/* Filter Toggle - Only for job seekers */}
+        {userType !== "employer" && (
+          <>
+            <div className="mb-6 flex items-center justify-between">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium transition hover:bg-white/10"
+              >
+                <Filter className="h-4 w-4" />
+                Filters
+                {hasActiveFilters && (
+                  <span className="ml-1 rounded-full bg-blue-500 px-2 py-0.5 text-xs">
+                    Active
+                  </span>
+                )}
+              </button>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-2 text-sm text-slate-300 transition hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                  Clear all
+                </button>
+              )}
+            </div>
+
+            {/* Filter Panel */}
+            {showFilters && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-8 rounded-xl border border-white/10 bg-white/5 p-6"
+              >
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-300">
+                      Track
+                    </label>
+                    <select
+                      value={filters.track}
+                      onChange={(e) =>
+                        setFilters({ ...filters, track: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    >
+                      <option value="all">All Tracks</option>
+                      {uniqueTracks.map((track) => (
+                        <option key={track} value={track}>
+                          {track}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-300">
+                      Location
+                    </label>
+                    <select
+                      value={filters.location}
+                      onChange={(e) =>
+                        setFilters({ ...filters, location: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    >
+                      <option value="all">All Locations</option>
+                      {uniqueLocations.map((location) => (
+                        <option key={location} value={location}>
+                          {location}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-300">
+                      Job Type
+                    </label>
+                    <select
+                      value={filters.jobType}
+                      onChange={(e) =>
+                        setFilters({ ...filters, jobType: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    >
+                      <option value="all">All Types</option>
+                      <option value="Internship">Internship</option>
+                      <option value="Part-time">Part-time</option>
+                      <option value="Full-time">Full-time</option>
+                      <option value="Freelance">Freelance</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-300">
+                      Experience
+                    </label>
+                    <select
+                      value={filters.experienceLevel}
+                      onChange={(e) =>
+                        setFilters({
+                          ...filters,
+                          experienceLevel: e.target.value,
+                        })
+                      }
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    >
+                      <option value="all">All Levels</option>
+                      <option value="Fresher">Fresher</option>
+                      <option value="Junior">Junior</option>
+                      <option value="Mid">Mid</option>
+                    </select>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </>
         )}
 
         {/* Jobs List */}
@@ -258,9 +361,23 @@ export default function JobsPage() {
           </div>
         ) : jobs.length === 0 ? (
           <div className="rounded-xl border border-white/10 bg-white/5 p-12 text-center">
-            <p className="text-lg text-slate-300">No jobs found</p>
+            <p className="text-lg text-slate-300">
+              {userType === "employer" ? "No jobs posted yet" : "No jobs found"}
+            </p>
             <p className="mt-2 text-sm text-slate-400">
-              Try adjusting your filters or search query
+              {userType === "employer" ? (
+                <>
+                  Start posting jobs to find the right talent.{" "}
+                  <Link
+                    href="/jobs/post"
+                    className="text-blue-400 hover:text-blue-300 underline"
+                  >
+                    Post your first job
+                  </Link>
+                </>
+              ) : (
+                "Try adjusting your filters or search query"
+              )}
             </p>
           </div>
         ) : (
@@ -272,8 +389,14 @@ export default function JobsPage() {
                 initial="hidden"
                 animate="visible"
                 custom={index}
-                className="group cursor-pointer rounded-xl border border-white/10 bg-white/5 p-6 transition hover:border-white/20 hover:bg-white/10"
-                onClick={() => router.push(`/jobs/${job._id}`)}
+                className={`group rounded-xl border border-white/10 bg-white/5 p-6 transition hover:border-white/20 hover:bg-white/10 ${
+                  userType === "employer" ? "" : "cursor-pointer"
+                }`}
+                onClick={
+                  userType !== "employer"
+                    ? () => router.push(`/jobs/${job._id}`)
+                    : undefined
+                }
               >
                 <div className="mb-4 flex items-start justify-between">
                   <div className="flex-1">
@@ -336,15 +459,39 @@ export default function JobsPage() {
                   </p>
                 )}
 
-                <div className="text-sm text-blue-300 transition group-hover:text-blue-200">
-                  View Details →
-                </div>
+                {userType === "employer" ? (
+                  <div className="mt-4 flex items-center gap-3">
+                    <Link
+                      href={`/jobs/${job._id}/edit`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-300 transition hover:bg-blue-500/20"
+                    >
+                      <Edit className="h-4 w-4" />
+                      Edit
+                    </Link>
+                    <motion.button
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        handleDeleteJob(job._id!);
+                      }}
+                      disabled={deletingJobId === job._id}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 transition hover:bg-red-500/20 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </motion.button>
+                  </div>
+                ) : (
+                  <div className="text-sm text-blue-300 transition group-hover:text-blue-200">
+                    View Details →
+                  </div>
+                )}
               </motion.div>
             ))}
           </div>
         )}
       </section>
-    </main>
+    </motion.main>
   );
 }
-

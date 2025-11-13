@@ -34,9 +34,9 @@ export async function GET(request: NextRequest) {
     const jobsWithScores = allJobs.map((job) => {
       // Calculate skill overlap
       const jobSkills = job.requiredSkills || [];
-      const matchedSkills = jobSkills.filter((skill) =>
+      const matchedSkills = jobSkills.filter((skill: string) =>
         userSkills.some(
-          (userSkill) =>
+          (userSkill: string) =>
             userSkill.toLowerCase() === skill.toLowerCase() ||
             userSkill.toLowerCase().includes(skill.toLowerCase()) ||
             skill.toLowerCase().includes(userSkill.toLowerCase())

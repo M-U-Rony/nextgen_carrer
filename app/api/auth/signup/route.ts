@@ -6,12 +6,20 @@ import User from "@/models/User";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, password } = body;
+    const { name, email, password, userType } = body;
 
     // Validate input
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: "Name, email, and password are required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate userType
+    if (!userType || !["job_seeker", "employer"].includes(userType)) {
+      return NextResponse.json(
+        { error: "Valid user type (job_seeker or employer) is required" },
         { status: 400 }
       );
     }
@@ -42,6 +50,8 @@ export async function POST(request: NextRequest) {
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
+      userType: userType || "job_seeker",
+      emailVerified: new Date(),
     });
 
     return NextResponse.json(
@@ -51,6 +61,7 @@ export async function POST(request: NextRequest) {
           id: user._id.toString(),
           name: user.name,
           email: user.email,
+          userType: user.userType,
         },
       },
       { status: 201 }

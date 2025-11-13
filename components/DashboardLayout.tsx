@@ -17,6 +17,7 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Inter } from "next/font/google";
+import { useUserType } from "@/hooks/useUserType";
 
 const inter = Inter({ subsets: ["latin"], weight: ["500", "600", "700"] });
 
@@ -30,12 +31,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navLinks = [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/jobs", label: "Jobs", icon: Briefcase },
-    { href: "/resources", label: "Learning", icon: BookOpen },
-    { href: "/profile", label: "Profile", icon: User },
-  ];
+  const userType = useUserType();
+  
+  const navLinks = userType === "employer"
+    ? [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/jobs/post", label: "Post Job", icon: Briefcase },
+        { href: "/jobs", label: "My Jobs", icon: Briefcase },
+        { href: "/profile", label: "Profile", icon: User },
+      ]
+    : [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/jobs", label: "Jobs", icon: Briefcase },
+        { href: "/resources", label: "Learning", icon: BookOpen },
+        { href: "/profile", label: "Profile", icon: User },
+      ];
 
   const handleLogout = async () => {
     await signOut({ redirect: false });
