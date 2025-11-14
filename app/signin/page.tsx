@@ -46,14 +46,8 @@ export default function SignInPage() {
     }
     
     if (sessionStatus === "authenticated" || isAuthenticated) {
-      // Check if user needs role selection
-      if (session?.user && (session.user as any).needsRoleSelection) {
-        // Use window.location for full page reload to ensure session is properly loaded
-        window.location.href = "/select-role";
-      } else {
-        // Use window.location for full page reload to ensure session is properly loaded
-        window.location.href = "/dashboard";
-      }
+      // Use window.location for full page reload to ensure session is properly loaded
+      window.location.href = "/dashboard";
     }
   }, [isAuthenticated, authLoading, session, sessionStatus]);
 
@@ -266,12 +260,12 @@ export default function SignInPage() {
               >
                 Password
               </label>
-              <Link
+              {/* <Link
                 href="/forgot-password"
                 className="text-xs text-blue-300 transition hover:text-blue-200"
               >
                 Forgot password?
-              </Link>
+              </Link> */}
             </div>
             <div className="relative mt-2">
               <input

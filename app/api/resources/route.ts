@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Resource from "@/models/Resource";
-import { auth } from "@/auth";
+import { getAuthenticatedUser } from "@/lib/auth-middleware";
 
 export async function GET(request: NextRequest) {
   try {
@@ -59,10 +59,11 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
-    const session = await auth();
+    // Check authentication (supports both NextAuth sessions and JWT tokens)
+    const authResult = await getAuthenticatedUser(request);
 
-    if (!session?.user?.email) {
-      return NextResponse.json(
+    if (authResult.error || !authResult.user) {
+      return authResult.error || NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );

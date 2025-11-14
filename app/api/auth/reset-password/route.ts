@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, newPassword } = body;
+    const { token, newPassword } = body;
 
     // Validate input
-    if (!email || !newPassword) {
+    if (!token || !newPassword) {
       return NextResponse.json(
-        { error: "Email and new password are required" },
+        { error: "Token and new password are required" },
         { status: 400 }
       );
     }
@@ -25,23 +26,32 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
 
-    // Find user
-    const user = await User.findOne({ email: email.toLowerCase() }).select(
-      "+password"
-    );
+    // Hash the token to compare with stored hash
+    const resetTokenHash = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
+    // Find user with valid token
+    const user = await User.findOne({
+      resetPasswordToken: resetTokenHash,
+      resetPasswordExpires: { $gt: new Date() }, // Token not expired
+    }).select("+password +resetPasswordToken +resetPasswordExpires");
 
     if (!user) {
       return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
+        { error: "Invalid or expired reset token" },
+        { status: 400 }
       );
     }
 
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    // Update password
+    // Update password and clear reset token
     user.password = hashedPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
     await user.save();
 
     return NextResponse.json(

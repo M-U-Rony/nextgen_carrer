@@ -8,6 +8,8 @@ export interface IUser {
   image?: string;
   emailVerified?: Date;
   userType: "job_seeker" | "employer";
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
   // Job Seeker specific fields
   skills?: string[];
   preferredTrack?: string;
@@ -44,6 +46,14 @@ const UserSchema = new Schema<IUser>(
     },
     emailVerified: {
       type: Date,
+    },
+    resetPasswordToken: {
+      type: String,
+      select: false,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      select: false,
     },
     userType: {
       type: String,

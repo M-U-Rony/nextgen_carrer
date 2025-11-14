@@ -52,9 +52,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   const isActive = (href: string) => {
+    // Exact match for dashboard
     if (href === "/dashboard") {
       return pathname === "/dashboard";
     }
+    // Exact match
+    if (pathname === href) {
+      return true;
+    }
+    // For /jobs/post, only match exactly (not /jobs)
+    if (href === "/jobs/post") {
+      return pathname === "/jobs/post";
+    }
+    // For /jobs, match /jobs but not /jobs/post
+    if (href === "/jobs") {
+      return pathname === "/jobs" || (pathname.startsWith("/jobs/") && pathname !== "/jobs/post");
+    }
+    // For other paths, use startsWith
     return pathname.startsWith(href);
   };
 

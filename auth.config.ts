@@ -6,7 +6,6 @@ import bcrypt from "bcrypt";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 
-// Build providers array conditionally
 const providers: Provider[] = [
   CredentialsProvider({
     name: "Credentials",
@@ -54,7 +53,6 @@ const providers: Provider[] = [
   }),
 ];
 
-// Only add Google provider if credentials are available
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   providers.push(
     GoogleProvider({
@@ -86,19 +84,16 @@ export const authConfig = {
           const existingUser = await User.findOne({ email: user.email });
 
           if (!existingUser) {
-            // Create new user for Google sign-in (default to job_seeker)
-            // New Google users will be prompted to select their role
-            const newUser = await User.create({
+  
+            await User.create({
               name: user.name || "User",
               email: user.email,
               image: user.image || undefined,
               emailVerified: new Date(),
-              userType: "job_seeker", // Default for Google OAuth, can be changed
+              userType: "job_seeker", 
             });
-            // Store flag in user object to indicate new Google user
-            (user as any).isNewGoogleUser = true;
           } else {
-            // Update user data if needed
+            
             if (user.name && !existingUser.name) {
               existingUser.name = user.name;
             }
@@ -127,10 +122,7 @@ export const authConfig = {
         if (user.userType) {
           token.userType = user.userType;
         }
-        // Track if this is a new Google user who needs role selection
-        if ((user as any).isNewGoogleUser) {
-          (token as any).needsRoleSelection = true;
-        }
+        // Role selection removed
       }
 
       // Always ensure userType is set by fetching from database if missing
@@ -175,56 +167,7 @@ export const authConfig = {
         }
       }
 
-      // Always check if user needs role selection (for both initial sign-in and token refresh)
-      if (token.email) {
-        try {
-          await connectDB();
-          const dbUser = await User.findOne({ email: token.email });
-          if (dbUser) {
-            // Check if user needs role selection (new Google user with default job_seeker role)
-            // Only set needsRoleSelection if:
-            // 1. User was created recently (within last 10 minutes)
-            // 2. User has no password (indicating Google OAuth)
-            // 3. User has default job_seeker role
-            // 4. User hasn't updated their profile since creation (meaning they haven't selected a role yet)
-            if (dbUser.createdAt && !dbUser.password) {
-              const createdAt = new Date(dbUser.createdAt);
-              const updatedAt = dbUser.updatedAt ? new Date(dbUser.updatedAt) : createdAt;
-              const now = new Date();
-              const minutesSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60);
-              
-              // Check if user has been updated since creation (indicates they've selected a role)
-              // If updatedAt is more than 10 seconds after createdAt, user has made changes
-              const hasBeenUpdated = updatedAt.getTime() > createdAt.getTime() + 10000; // 10 seconds buffer
-              
-              // Only set needsRoleSelection for new Google users who:
-              // - Were created recently (within 10 minutes)
-              // - Have the default job_seeker role
-              // - Haven't updated their profile yet (meaning they haven't visited role selection page)
-              if (
-                minutesSinceCreation < 10 && 
-                dbUser.userType === "job_seeker" && 
-                !hasBeenUpdated
-              ) {
-                (token as any).needsRoleSelection = true;
-              } else {
-                // Clear the flag if:
-                // - User has updated their profile (selected a role)
-                // - User is an employer (explicitly selected employer)
-                // - User is not a new user
-                (token as any).needsRoleSelection = false;
-              }
-            } else {
-              // Clear the flag if user has a password (not a Google OAuth user)
-              (token as any).needsRoleSelection = false;
-            }
-          }
-        } catch (error) {
-          console.error("Error checking needsRoleSelection in JWT callback:", error);
-          // Default to false on error
-          (token as any).needsRoleSelection = false;
-        }
-      }
+      // Role selection removed - users default to job_seeker and can change in profile
 
       return token;
     },
@@ -261,11 +204,6 @@ export const authConfig = {
           }
         } else {
           session.user.userType = "job_seeker"; // Default fallback
-        }
-
-        // Pass needsRoleSelection flag to session
-        if ((token as any).needsRoleSelection) {
-          (session.user as any).needsRoleSelection = true;
         }
       }
 

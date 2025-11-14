@@ -19,12 +19,7 @@ export default function Home() {
     }
     
     if (sessionStatus === "authenticated" || isAuthenticated) {
-      // Check if user needs role selection
-      if (session?.user && (session.user as any).needsRoleSelection) {
-        window.location.href = "/select-role";
-      } else {
-        window.location.href = "/dashboard";
-      }
+      window.location.href = "/dashboard";
     }
   }, [isAuthenticated, authLoading, session, sessionStatus, router]);
 

@@ -74,9 +74,13 @@ export default function JobsPage() {
   }, [isAuthenticated, isLoading, router]);
 
   useEffect(() => {
-    fetchJobs();
+    // Only fetch jobs if userData is loaded (to ensure correct userType)
+    // This prevents employers from seeing all jobs before their userType is determined
+    if (isAuthenticated && userData) {
+      fetchJobs();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, searchQuery, userType]);
+  }, [filters, searchQuery, userType, userData, isAuthenticated]);
 
   const fetchUserProfile = async () => {
     try {
