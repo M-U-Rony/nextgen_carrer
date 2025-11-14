@@ -12,6 +12,9 @@ import {
   LogOut,
   Menu,
   X,
+  MessageSquare,
+  Sparkles,
+  Map,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -42,6 +45,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       ]
     : [
         { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/careerbot", label: "CareerBot", icon: Sparkles },
+        { href: "/roadmap", label: "Roadmap", icon: Map },
         { href: "/jobs", label: "Jobs", icon: Briefcase },
         { href: "/resources", label: "Learning", icon: BookOpen },
         { href: "/profile", label: "Profile", icon: User },
@@ -67,6 +72,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // For /jobs, match /jobs but not /jobs/post
     if (href === "/jobs") {
       return pathname === "/jobs" || (pathname.startsWith("/jobs/") && pathname !== "/jobs/post");
+    }
+    // For /careerbot, exact match
+    if (href === "/careerbot") {
+      return pathname === "/careerbot";
+    }
+    // For /roadmap, exact match
+    if (href === "/roadmap") {
+      return pathname === "/roadmap";
     }
     // For other paths, use startsWith
     return pathname.startsWith(href);
@@ -103,7 +116,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <h1
               className={`${inter.className} text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent`}
             >
-              NextGen Carrer
+              NextGen Career
             </h1>
           </Link>
         </div>
@@ -163,7 +176,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <h1
                 className={`${inter.className} text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent`}
               >
-                NextGen Carrer
+                NextGen Career
               </h1>
             </Link>
             <button

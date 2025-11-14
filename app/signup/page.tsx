@@ -252,7 +252,7 @@ export default function SignUpPage() {
           <h1
             className={`${inter.className} mt-4 text-2xl font-semibold sm:text-3xl`}
           >
-            Join NextGen Carrer
+            Join NextGen Career
           </h1>
           <p className="mt-3 text-sm text-slate-300">
             Create your profile and start building your future

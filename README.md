@@ -20,6 +20,21 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment Variables
+
+Required environment variables for full functionality:
+
+- `MONGODB_URI` - MongoDB connection string
+- `NEXTAUTH_SECRET` - Secret for NextAuth session encryption
+- `NEXTAUTH_URL` - Your application URL (e.g., http://localhost:3000)
+- `GEMINI_API_KEY` or `GOOGLE_API_KEY` - Google Gemini API key (required for AI features: CareerBot, CV generation, Roadmap, CV extraction). Get your free API key at https://aistudio.google.com/app/apikey
+- `GOOGLE_CLIENT_ID` - Google OAuth client ID (optional, for Google sign-in)
+- `GOOGLE_CLIENT_SECRET` - Google OAuth client secret (optional, for Google sign-in)
+
+Optional environment variables:
+
+- `GEMINI_MODEL` - Gemini model to use (default: gemini-2.0-flash-exp). Options: gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

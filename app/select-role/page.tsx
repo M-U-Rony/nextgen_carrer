@@ -132,7 +132,7 @@ export default function SelectRolePage() {
             Choose Your Role
           </h1>
           <p className="mt-3 text-sm text-slate-300">
-            Select how you&rsquo;d like to use NextGen Carrer
+            Select how you&rsquo;d like to use NextGen Career
           </p>
         </div>
 

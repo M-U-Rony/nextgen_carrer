@@ -1,5 +1,13 @@
 import mongoose, { Schema, model, models } from "mongoose";
 
+export interface IWorkExperience {
+  jobTitle: string;
+  company: string;
+  startDate: string; // Format: "MMM YYYY" e.g., "Oct 2024"
+  endDate?: string; // Optional, can be "Present" for current jobs
+  description: string[]; // Array of bullet point descriptions
+}
+
 export interface IUser {
   _id?: string;
   name: string;
@@ -15,6 +23,12 @@ export interface IUser {
   preferredTrack?: string;
   education?: string;
   experienceLevel?: string;
+  roadmap?: string; // AI-generated career roadmap
+  cvSummary?: string; // AI-generated professional summary
+  cvBullets?: string[]; // AI-generated CV bullet points
+  projects?: string[]; // User's projects (for CV generation)
+  workExperience?: IWorkExperience[]; // Work experience entries
+  cvFile?: string; // Path to uploaded CV PDF file
   // Employer specific fields
   companyName?: string;
   companyWebsite?: string;
@@ -75,6 +89,56 @@ const UserSchema = new Schema<IUser>(
       trim: true,
     },
     experienceLevel: {
+      type: String,
+      trim: true,
+    },
+    roadmap: {
+      type: String,
+      trim: true,
+    },
+    cvSummary: {
+      type: String,
+      trim: true,
+    },
+    cvBullets: {
+      type: [String],
+      default: [],
+    },
+    projects: {
+      type: [String],
+      default: [],
+    },
+    workExperience: {
+      type: [
+        {
+          jobTitle: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          company: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          startDate: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          endDate: {
+            type: String,
+            trim: true,
+          },
+          description: {
+            type: [String],
+            default: [],
+          },
+        },
+      ],
+      default: [],
+    },
+    cvFile: {
       type: String,
       trim: true,
     },

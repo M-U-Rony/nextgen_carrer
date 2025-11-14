@@ -55,7 +55,7 @@ const inter = Inter({
 
 const testimonials = [
   {
-    quote: "Nextgen Carrer helped me land my first internship!",
+    quote: "Nextgen Career helped me land my first internship!",
     name: "Amina, Software Intern",
   },
   {
@@ -64,7 +64,7 @@ const testimonials = [
   },
 ];
 
-const typingTitle = "NextGen Carrer";
+const typingTitle = "NextGen Career";
 
 function AnimatedTitle() {
   const letterDelay = 0.09;
@@ -181,7 +181,7 @@ export default function LandingPage() {
               Connect Your Skills to Real Opportunities
             </h1>
             <p className="text-base text-slate-200 sm:text-lg">
-              Nextgen Carrer helps you discover jobs, learn in-demand skills,
+              Nextgen Career helps you discover jobs, learn in-demand skills,
               and build your dream career — all in one place.
             </p>
 
@@ -282,7 +282,7 @@ export default function LandingPage() {
             Plan, build, and launch your future in three focused steps.
           </h2>
           <p className="mt-4 text-base text-slate-300">
-            Nextgen Carrer combines coaching expertise with AI to guide you from
+            Nextgen Career combines coaching expertise with AI to guide you from
             where you are to where you want to be.
           </p>
         </div>
@@ -325,7 +325,7 @@ export default function LandingPage() {
                 Everything you need to map your next move.
               </h2>
               <p className="mt-4 text-base text-slate-300">
-                From live job insights to guided skill-building, Nextgen Carrer
+                From live job insights to guided skill-building, Nextgen Career
                 keeps you motivated, on track, and connected to what matters
                 most.
               </p>
@@ -386,7 +386,7 @@ export default function LandingPage() {
             Your career journey starts today.
           </h2>
           <p className="mt-4 text-base text-slate-300 sm:text-lg">
-            Join students and job seekers using Nextgen Carrer to open doors,
+            Join students and job seekers using Nextgen Career to open doors,
             grow skills, and seize the opportunities they deserve.
           </p>
           <div className="mt-8 flex justify-center">
@@ -394,7 +394,7 @@ export default function LandingPage() {
               href="/signin"
               className="inline-flex items-center gap-2 rounded-full bg-cyan-500 px-6 py-2.5 text-sm font-semibold text-slate-950 transition-transform duration-200 hover:-translate-y-0.5 hover:bg-cyan-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 sm:px-7 sm:py-3 sm:text-base"
             >
-              Join Nextgen Carrer
+              Join Nextgen Career
               <ArrowIcon className="h-5 w-5" />
             </Link>
           </div>
@@ -404,7 +404,7 @@ export default function LandingPage() {
       <footer className="border-t border-white/10 bg-slate-950/80 py-6 text-center sm:py-8">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 text-sm text-slate-400 sm:flex-row sm:px-6">
           <p className="w-full text-center">
-            © {new Date().getFullYear()} Nextgen Carrer. All rights reserved.
+            © {new Date().getFullYear()} Nextgen Career. All rights reserved.
           </p>
         </div>
       </footer>

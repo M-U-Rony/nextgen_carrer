@@ -14,6 +14,11 @@ import {
   Edit,
   Trash2,
   Plus,
+  XCircle,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
 } from "lucide-react";
 import type { IJob } from "@/models/Job";
 import type { IUser } from "@/models/User";
@@ -54,6 +59,9 @@ export default function JobsPage() {
   });
   const [showFilters, setShowFilters] = useState(false);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+  const [expandedSkillGaps, setExpandedSkillGaps] = useState<Set<string>>(new Set());
+  const [skillGapResources, setSkillGapResources] = useState<Record<string, any[]>>({});
+  const [loadingResources, setLoadingResources] = useState<Record<string, boolean>>({});
 
   const userType = useUserType(userData);
 
@@ -116,7 +124,7 @@ export default function JobsPage() {
           setJobs(data.jobs || []);
         }
       } else {
-        // Job seekers see all jobs with filters
+        // Job seekers see all jobs with filters and match scores
         const params = new URLSearchParams();
 
         if (filters.track !== "all") params.append("track", filters.track);
@@ -125,8 +133,13 @@ export default function JobsPage() {
         if (filters.experienceLevel !== "all")
           params.append("experienceLevel", filters.experienceLevel);
         if (searchQuery) params.append("search", searchQuery);
+        params.append("includeMatch", "true"); // Request match scores
 
-        const response = await fetch(`/api/jobs?${params.toString()}`);
+        const response = await fetch(`/api/jobs?${params.toString()}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
         const data = await response.json();
         setJobs(data.jobs || []);
       }
@@ -134,6 +147,53 @@ export default function JobsPage() {
       console.error("Error fetching jobs:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleSkillGap = async (jobId: string, missingSkills: string[]) => {
+    const isExpanded = expandedSkillGaps.has(jobId);
+    
+    if (isExpanded) {
+      // Collapse
+      setExpandedSkillGaps(prev => {
+        const next = new Set(prev);
+        next.delete(jobId);
+        return next;
+      });
+    } else {
+      // Expand - fetch resources if not already loaded
+      setExpandedSkillGaps(prev => new Set(prev).add(jobId));
+      
+      if (!skillGapResources[jobId] && missingSkills.length > 0) {
+        await fetchSkillGapResources(jobId, missingSkills);
+      }
+    }
+  };
+
+  const fetchSkillGapResources = async (jobId: string, missingSkills: string[]) => {
+    try {
+      setLoadingResources(prev => ({ ...prev, [jobId]: true }));
+      const token = getToken();
+      const response = await fetch("/api/skill-gap", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ jobId }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success && data.data) {
+        setSkillGapResources(prev => ({
+          ...prev,
+          [jobId]: data.data.recommendedResources || [],
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching skill gap resources:", error);
+    } finally {
+      setLoadingResources(prev => ({ ...prev, [jobId]: false }));
     }
   };
 
@@ -393,11 +453,27 @@ export default function JobsPage() {
               >
                 <div className="mb-4 flex items-start justify-between">
                   <div className="flex-1">
-                    <h3
-                      className={`${inter.className} mb-2 text-xl font-semibold text-white group-hover:text-blue-300`}
-                    >
-                      {job.title}
-                    </h3>
+                    <div className="mb-2 flex items-center gap-2">
+                      <h3
+                        className={`${inter.className} text-xl font-semibold text-white group-hover:text-blue-300`}
+                      >
+                        {job.title}
+                      </h3>
+                      {/* Match Percentage Badge - Only for job seekers */}
+                      {userType !== "employer" && (job as any).matchPercentage && (
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                            (job as any).matchScore >= 70
+                              ? "bg-green-500/20 text-green-300 border border-green-500/30"
+                              : (job as any).matchScore >= 50
+                              ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30"
+                              : "bg-red-500/20 text-red-300 border border-red-500/30"
+                          }`}
+                        >
+                          {(job as any).matchPercentage} Match
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-slate-300">{job.company}</p>
                   </div>
                   <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
@@ -425,19 +501,145 @@ export default function JobsPage() {
                   </span>
                 </div>
 
+                {/* Match Reasons - Only for job seekers */}
+                {userType !== "employer" && (job as any).matchReasons && (job as any).matchReasons.length > 0 && (
+                  <div className="mb-4 rounded-lg bg-white/5 p-3 border border-white/10">
+                    <p className="mb-1.5 text-xs font-medium text-slate-300">
+                      Why this matches:
+                    </p>
+                    <ul className="space-y-1">
+                      {(job as any).matchReasons.slice(0, 2).map((reason: string, idx: number) => (
+                        <li key={idx} className="text-xs text-slate-400 flex items-start gap-1.5">
+                          <span className="text-green-400 mt-0.5">•</span>
+                          <span>{reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Skill Gap Analysis - Only for partial matches (< 100%) */}
+                {userType !== "employer" && 
+                 (job as any).missingSkills && 
+                 (job as any).missingSkills.length > 0 && 
+                 (job as any).matchScore < 100 && (
+                  <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="mb-3 flex items-center gap-2">
+                          <XCircle className="h-4 w-4 text-amber-400" />
+                          <p className="text-xs font-semibold text-amber-300">
+                            Skill Gap
+                          </p>
+                        </div>
+                        
+                        {/* Format: "Missing: X, Y → Recommended: Resource1, Resource2" */}
+                        <div className="mb-3 rounded border border-amber-400/20 bg-amber-500/5 p-2.5">
+                          <p className="text-xs leading-relaxed text-amber-200">
+                            <span className="font-semibold text-amber-300">Missing:</span>{" "}
+                            {(job as any).missingSkills.slice(0, 3).join(", ")}
+                            {(job as any).missingSkills.length > 3 && ` +${(job as any).missingSkills.length - 3} more`}
+                          </p>
+                          
+                          {/* Expanded Resources */}
+                          {expandedSkillGaps.has(job._id!) && (
+                            <div className="mt-2 pt-2 border-t border-amber-400/10">
+                              {loadingResources[job._id!] ? (
+                                <p className="text-xs text-amber-200/60">Loading recommended resources...</p>
+                              ) : skillGapResources[job._id!]?.length > 0 ? (
+                                <p className="text-xs leading-relaxed text-amber-200">
+                                  <span className="font-semibold text-amber-300">→ Recommended:</span>{" "}
+                                  {skillGapResources[job._id!].slice(0, 3).map((resource: any, idx: number) => {
+                                    const resourceLabel = resource.platform === "YouTube" 
+                                      ? `${resource.title} (YouTube Playlist)`
+                                      : resource.platform === "Coursera" || resource.platform === "Udemy" || resource.platform === "edX"
+                                      ? `${resource.title} (Course)`
+                                      : `${resource.title} (${resource.platform})`;
+                                    return (
+                                      <span key={idx}>
+                                        {idx > 0 && ", "}
+                                        <a 
+                                          href={resource.url} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="text-amber-100 hover:text-amber-50 underline font-medium"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          {resourceLabel}
+                                        </a>
+                                      </span>
+                                    );
+                                  })}
+                                  {skillGapResources[job._id!].length > 3 && (
+                                    <span className="text-amber-200/70">
+                                      {", "}+{skillGapResources[job._id!].length - 3} more
+                                    </span>
+                                  )}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-amber-200/60">
+                                  <span className="font-semibold text-amber-300">→ Recommended:</span>{" "}
+                                  No resources found. <Link href={`/jobs/${job._id}`} onClick={(e) => e.stopPropagation()} className="underline">View details</Link>
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Expand/Collapse Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSkillGap(job._id!, (job as any).missingSkills);
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-amber-300 hover:text-amber-200 transition"
+                        >
+                          {expandedSkillGaps.has(job._id!) ? (
+                            <>
+                              <ChevronUp className="h-3 w-3" />
+                              Hide recommendations
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="h-3 w-3" />
+                              Show recommendations
+                            </>
+                          )}
+                        </button>
+                        
+                        {/* Link to full analysis */}
+                        <Link
+                          href={`/jobs/${job._id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="block mt-2 text-xs font-medium text-amber-300 hover:text-amber-200 transition"
+                        >
+                          View full analysis →
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="mb-4">
                   <p className="mb-2 text-xs font-medium text-slate-400">
                     Skills
                   </p>
                   <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                    {job.requiredSkills.slice(0, 3).map((skill) => (
-                      <span
-                        key={skill}
-                        className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/80"
-                      >
-                        {skill}
-                      </span>
-                    ))}
+                    {job.requiredSkills.slice(0, 3).map((skill) => {
+                      const isMatched = userType !== "employer" && (job as any).matchedSkills?.includes(skill);
+                      return (
+                        <span
+                          key={skill}
+                          className={`rounded-full px-2 py-1 text-xs ${
+                            isMatched
+                              ? "bg-green-500/20 text-green-300 border border-green-500/30"
+                              : "bg-white/10 text-white/80"
+                          }`}
+                        >
+                          {skill}
+                        </span>
+                      );
+                    })}
                     {job.requiredSkills.length > 3 && (
                       <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/80">
                         +{job.requiredSkills.length - 3}

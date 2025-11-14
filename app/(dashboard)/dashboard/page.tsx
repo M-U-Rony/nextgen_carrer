@@ -5,8 +5,16 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Inter } from "next/font/google";
-import { useMemo, useState, useEffect, useCallback, type FC } from "react";
-import { ExternalLink } from "lucide-react";
+import { useState, useEffect, useCallback, type FC } from "react";
+import {
+  ExternalLink,
+  Sparkles,
+  BookOpen,
+  Briefcase,
+  AlertCircle,
+  ArrowRight,
+  Award,
+} from "lucide-react";
 import type { IJob } from "@/models/Job";
 import type { IResource } from "@/models/Resource";
 import type { IUser } from "@/models/User";
@@ -31,21 +39,13 @@ const cardVariants = {
   }),
 };
 
-// Default user data - only used as fallback for display, not for new users
-const defaultUserData = {
-  education: "",
-  experienceLevel: "",
-  preferredTrack: "",
-  skills: [],
-  profileCompletion: 0,
-};
-
 const gradientBackground =
   "bg-[radial-gradient(circle_at_20%_20%,#2563EB22,transparent_55%),radial-gradient(circle_at_80%_0%,#9333EA22,transparent_60%),linear-gradient(115deg,#020617,#0f172a)]";
 
 interface RecommendedJob extends IJob {
   matchScore?: number;
   matchedSkills?: string[];
+  missingSkills?: string[];
   matchReason?: string;
 }
 
@@ -55,100 +55,113 @@ interface RecommendedResource extends IResource {
   matchReason?: string;
 }
 
+interface DashboardData {
+  user: IUser;
+  stats: {
+    skillsCount: number;
+    savedCourses: number;
+    savedJobs: number;
+    missingSkillsCount: number;
+  };
+  bestJobs: RecommendedJob[];
+  roadmapPreview: string;
+  recommendedCourses: RecommendedResource[];
+}
+
 const DashboardPage: FC = () => {
   const { user: authUser, isLoading, isAuthenticated } = useAuth();
-  const { data: session, status: sessionStatus } = useSession();
+  const { status: sessionStatus } = useSession();
   const router = useRouter();
-  const [recommendedJobs, setRecommendedJobs] = useState<RecommendedJob[]>([]);
-  const [recommendedResources, setRecommendedResources] = useState<
-    RecommendedResource[]
-  >([]);
-  const [loadingJobs, setLoadingJobs] = useState(true);
-  const [loadingResources, setLoadingResources] = useState(true);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(
+    null
+  );
+  const [typingText, setTypingText] = useState("");
   const [userData, setUserData] = useState<IUser | null>(null);
   const [employerJobs, setEmployerJobs] = useState<IJob[]>([]);
   const [loadingEmployerJobs, setLoadingEmployerJobs] = useState(true);
+  const [loadingDashboard, setLoadingDashboard] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const calculateProfileCompletion = (user: IUser | null): number => {
-    if (!user) return 0;
-    let completed = 0;
-    const total = 5; // name, email, skills, preferredTrack, experienceLevel
+  // Use authUser for initial userType check to avoid circular dependency
+  // Convert authUser to IUser format if userData is not available
+  const userType = useUserType(
+    userData ||
+      (authUser
+        ? ({
+            _id: authUser.id,
+            name: authUser.name || "",
+            email: authUser.email || "",
+            userType: authUser.userType || "job_seeker",
+            image: authUser.image,
+          } as IUser)
+        : null)
+  );
 
-    if (user.name) completed++;
-    if (user.email) completed++;
-    if (user.skills && user.skills.length > 0) completed++;
-    if (user.preferredTrack) completed++;
-    if (user.experienceLevel) completed++;
+  // Typing effect animation
+  useEffect(() => {
+    const text = "Building your Nextgen Career";
+    let currentIndex = 0;
+    const interval = setInterval(() => {
+      if (currentIndex <= text.length) {
+        setTypingText(text.substring(0, currentIndex));
+        currentIndex++;
+      } else {
+        clearInterval(interval);
+      }
+    }, 100);
 
-    return Math.round((completed / total) * 100);
-  };
+    return () => clearInterval(interval);
+  }, []);
 
-  const user = useMemo(() => {
-    if (userData) {
-      return {
-        name: userData.name || authUser?.name || "User",
-        email: userData.email || authUser?.email || "",
-        image: userData.image || authUser?.image || "/avatar.jpg",
-        skills: userData.skills || [],
-        preferredTrack: userData.preferredTrack || "",
-        education: userData.education || "",
-        experienceLevel: userData.experienceLevel || "",
-        profileCompletion: calculateProfileCompletion(userData),
-      };
+  // Redirect if not authenticated
+  useEffect(() => {
+    const sessionLoading = sessionStatus === "loading";
+    if (isLoading || sessionLoading) {
+      return;
     }
-    if (authUser) {
-      return {
-        name: authUser.name || "User",
-        email: authUser.email || "",
-        image: authUser.image || "/avatar.jpg",
-        skills: [],
-        preferredTrack: "",
-        education: "",
-        experienceLevel: "",
-        profileCompletion: 0,
-      };
+
+    if (!isAuthenticated && sessionStatus !== "authenticated") {
+      router.push("/signin");
     }
-    return {
-      name: "User",
-      email: "",
-      image: "/avatar.jpg",
-      skills: [],
-      preferredTrack: "",
-      education: "",
-      experienceLevel: "",
-      profileCompletion: 0,
-    };
-  }, [authUser, userData]);
+  }, [isLoading, isAuthenticated, sessionStatus, router]);
 
-  const userType = useUserType(userData);
-
-  const isProfileIncomplete = useMemo(() => {
-    if (userType === "employer") {
-      return !userData || !userData.companyName;
-    }
-    // Job seeker profile incomplete check
-    return (
-      !userData ||
-      !userData.skills ||
-      userData.skills.length === 0 ||
-      !userData.preferredTrack ||
-      !userData.experienceLevel
-    );
-  }, [userData, userType]);
-
-  const skillsColumns = useMemo(() => {
-    const midpoint = Math.ceil(user.skills.length / 2);
-    return [user.skills.slice(0, midpoint), user.skills.slice(midpoint)];
-  }, [user.skills]);
-
-  // Define fetch functions with useCallback to prevent unnecessary re-renders
-  const fetchUserProfile = useCallback(async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
+      setLoadingDashboard(true);
+      setError(null);
       const token = getToken();
       const headers: Record<string, string> = {};
 
-      // Only add Authorization header if we have a JWT token
-      // For NextAuth sessions, the session cookie will be sent automatically
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch("/api/dashboard", {
+        headers,
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setDashboardData(data.data);
+        setUserData(data.data.user as IUser);
+      } else {
+        setError(data.error || "Failed to load dashboard data");
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      setError("Failed to load dashboard data. Please try again.");
+    } finally {
+      setLoadingDashboard(false);
+    }
+  }, []);
+
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      setError(null);
+      const token = getToken();
+      const headers: Record<string, string> = {};
+
       if (token) {
         headers.Authorization = `Bearer ${token}`;
       }
@@ -159,63 +172,19 @@ const DashboardPage: FC = () => {
       const data = await response.json();
       if (response.ok && data.user) {
         setUserData(data.user);
+      } else {
+        setError(data.error || "Failed to load user profile");
       }
     } catch (error) {
       console.error("Error fetching user profile:", error);
-    }
-  }, []);
-
-  const fetchRecommendedJobs = useCallback(async () => {
-    try {
-      setLoadingJobs(true);
-      const token = getToken();
-      const headers: Record<string, string> = {};
-
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-
-      const response = await fetch("/api/recommendations/jobs", {
-        headers,
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setRecommendedJobs(data.jobs || []);
-      }
-    } catch (error) {
-      console.error("Error fetching recommended jobs:", error);
-    } finally {
-      setLoadingJobs(false);
-    }
-  }, []);
-
-  const fetchRecommendedResources = useCallback(async () => {
-    try {
-      setLoadingResources(true);
-      const token = getToken();
-      const headers: Record<string, string> = {};
-
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-
-      const response = await fetch("/api/recommendations/resources", {
-        headers,
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setRecommendedResources(data.resources || []);
-      }
-    } catch (error) {
-      console.error("Error fetching recommended resources:", error);
-    } finally {
-      setLoadingResources(false);
+      setError("Failed to load user profile. Please try again.");
     }
   }, []);
 
   const fetchEmployerJobs = useCallback(async () => {
     try {
       setLoadingEmployerJobs(true);
+      setError(null);
       const token = getToken();
       const headers: Record<string, string> = {};
 
@@ -229,58 +198,47 @@ const DashboardPage: FC = () => {
       const data = await response.json();
       if (response.ok) {
         setEmployerJobs(data.jobs || []);
+      } else {
+        setError(data.error || "Failed to load jobs");
       }
     } catch (error) {
       console.error("Error fetching employer jobs:", error);
+      setError("Failed to load jobs. Please try again.");
     } finally {
       setLoadingEmployerJobs(false);
     }
   }, []);
 
-  // Redirect if not authenticated (wait for session to load first)
+  // Fetch dashboard data
   useEffect(() => {
-    // Wait for both auth and session to finish loading before redirecting
-    const sessionLoading = sessionStatus === "loading";
-    if (isLoading || sessionLoading) {
-      return; // Still loading, don't redirect yet
-    }
-
-    // Only redirect if we're sure the user is not authenticated
-    if (!isAuthenticated && sessionStatus !== "authenticated") {
-      router.push("/signin");
-    }
-  }, [isLoading, isAuthenticated, sessionStatus, router]);
-
-  // Role selection removed - users can change their role in profile settings
-
-  // Fetch user profile first
-  useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && userType === "job_seeker") {
+      fetchDashboardData();
+    } else if (isAuthenticated && userType === "employer") {
       fetchUserProfile();
-    }
-  }, [isAuthenticated, fetchUserProfile]);
-
-  // Fetch data based on user type after userData is loaded
-  useEffect(() => {
-    if (!isAuthenticated || !userData) return;
-
-    // Only fetch recommendations for job seekers
-    if (userType === "job_seeker") {
-      fetchRecommendedJobs();
-      fetchRecommendedResources();
-    }
-    // Fetch employer jobs for employers
-    if (userType === "employer") {
       fetchEmployerJobs();
     }
   }, [
     isAuthenticated,
-    userData,
     userType,
-    fetchRecommendedJobs,
-    fetchRecommendedResources,
+    fetchUserProfile,
     fetchEmployerJobs,
+    fetchDashboardData,
   ]);
+
+  const formatRoadmapPreview = (text: string) => {
+    if (!text) return "";
+    const lines = text.split("\n");
+    // Take first 10 lines or until we hit Week 3
+    const preview: string[] = [];
+    let weekCount = 0;
+    for (const line of lines) {
+      if (line.match(/^##?\s*Week\s*3/i)) break;
+      preview.push(line);
+      if (line.match(/^##?\s*Week\s*\d+/i)) weekCount++;
+      if (weekCount >= 2 && preview.length > 8) break;
+    }
+    return preview.join("\n");
+  };
 
   if (isLoading) {
     return (
@@ -297,171 +255,112 @@ const DashboardPage: FC = () => {
     return null;
   }
 
-  return (
-    <motion.div
-      variants={pageFade}
-      initial="hidden"
-      animate="visible"
-      className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10`}
-    >
-      <section className="mx-auto flex max-w-6xl flex-col gap-6 sm:gap-8 lg:gap-10">
-        {/* Profile Incomplete Banner - Only for job seekers */}
-        {isProfileIncomplete && userType !== "employer" && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/20 to-orange-500/20 p-6 backdrop-blur"
-          >
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3
-                  className={`${inter.className} mb-2 text-xl font-semibold text-white`}
+  // Employer Dashboard (keep existing)
+  if (userType === "employer") {
+    return (
+      <motion.div
+        variants={pageFade}
+        initial="hidden"
+        animate="visible"
+        className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10`}
+      >
+        <section className="mx-auto flex max-w-6xl flex-col gap-6 sm:gap-8 lg:gap-10">
+          {/* Error Banner */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-xl border border-red-500/50 bg-red-500/10 p-4 text-red-200"
+            >
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5" />
+                <span>{error}</span>
+                <button
+                  onClick={() => setError(null)}
+                  className="ml-auto text-red-300 hover:text-red-100"
                 >
-                  Complete Your Profile
-                </h3>
-                <p className="text-sm text-slate-200">
-                  To get personalized job recommendations and learning
-                  resources, please fill out your profile with your skills,
-                  preferred career track, and experience level.
-                </p>
+                  ×
+                </button>
               </div>
-              <Link href="/profile">
+            </motion.div>
+          )}
+          {/* Hero */}
+          <motion.div
+            variants={cardVariants}
+            initial="hidden"
+            animate="visible"
+            custom={0}
+            className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur lg:p-8"
+          >
+            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-4">
+                <div className="relative h-20 w-20 overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-br from-blue-400/40 to-purple-500/20 p-[2px]">
+                  <Image
+                    src={userData?.image || authUser?.image || "/avatar.jpg"}
+                    alt={userData?.name || authUser?.name || "User"}
+                    fill
+                    className="rounded-2xl object-cover"
+                    sizes="80px"
+                  />
+                </div>
+                <div>
+                  <h2
+                    className={`${inter.className} text-xl font-semibold text-white sm:text-2xl`}
+                  >
+                    {userData?.companyName || userData?.name || authUser?.name}
+                  </h2>
+                  <p className="text-sm text-slate-300">
+                    {userData?.email || authUser?.email}
+                  </p>
+                </div>
+              </div>
+              <Link href="/jobs/post">
                 <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="whitespace-nowrap rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:shadow-xl"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:shadow-xl"
                 >
-                  Complete Profile
+                  + Post New Job
                 </motion.button>
               </Link>
             </div>
           </motion.div>
-        )}
 
-        {/* Conditional Rendering Based on User Type */}
-        {userType === "employer" ? (
-          // Employer Dashboard
-          <>
-            <motion.div
-              variants={cardVariants}
-              initial="hidden"
-              animate="visible"
-              custom={0}
-              className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur lg:p-8"
+          {/* Employer Jobs */}
+          <motion.section
+            variants={cardVariants}
+            initial="hidden"
+            animate="visible"
+            custom={1}
+            className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur lg:p-8"
+          >
+            <h3
+              className={`${inter.className} mb-6 text-lg font-semibold text-white`}
             >
-              <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="relative h-20 w-20 overflow-hidden rounded-2xl border border-white/15 bg-linear-to-br from-blue-400/40 to-purple-500/20 p-[2px]">
-                    <Image
-                      src={user.image}
-                      alt={user.name}
-                      fill
-                      className="rounded-2xl object-cover"
-                      sizes="80px"
-                    />
-                  </div>
-                  <div>
-                    <h2
-                      className={`${inter.className} text-xl font-semibold text-white sm:text-2xl`}
-                    >
-                      {userData?.companyName || user.name}
-                    </h2>
-                    <p className="text-sm text-slate-300">{user.email}</p>
-                    {userData?.companyWebsite && (
-                      <a
-                        href={userData.companyWebsite}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-400 hover:text-blue-300"
-                      >
-                        {userData.companyWebsite}
-                      </a>
-                    )}
-                  </div>
-                </div>
-                <Link href="/profile">
-                  <motion.button
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
-                    className="inline-flex items-center justify-center rounded-xl bg-linear-to-r from-[#2563EB] to-[#9333EA] px-4 py-2 text-sm font-semibold shadow-lg shadow-blue-900/40 transition"
-                  >
-                    Edit Profile
-                  </motion.button>
-                </Link>
+              Your Posted Jobs
+            </h3>
+            {loadingEmployerJobs ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
               </div>
-
-              {userData?.companyDescription && (
-                <div className="mt-6">
-                  <p className="text-sm text-slate-300">
-                    {userData.companyDescription}
-                  </p>
-                </div>
-              )}
-
-              <div className="mt-6">
+            ) : employerJobs.length === 0 ? (
+              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-8 text-center">
+                <p className="text-slate-300">No jobs posted yet</p>
                 <Link href="/jobs/post">
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="w-full rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:shadow-xl"
+                    className="mt-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:shadow-xl"
                   >
-                    + Post New Job
+                    Post Your First Job
                   </motion.button>
                 </Link>
               </div>
-            </motion.div>
-
-            <motion.section
-              variants={cardVariants}
-              initial="hidden"
-              animate="visible"
-              custom={1}
-              className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur lg:p-8"
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h3
-                    className={`${inter.className} text-lg font-semibold text-white`}
-                  >
-                    Your Posted Jobs
-                  </h3>
-                  <p className="text-sm text-slate-300">
-                    Manage and track your job postings ({employerJobs.length})
-                  </p>
-                </div>
-                <Link
-                  href="/jobs"
-                  className="text-sm text-blue-300 transition hover:text-blue-200"
-                >
-                  View all jobs →
-                </Link>
-              </div>
-
-              {loadingEmployerJobs ? (
-                <div className="mt-6 flex items-center justify-center py-12">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
-                </div>
-              ) : employerJobs.length === 0 ? (
-                <div className="mt-6 rounded-xl border border-white/10 bg-slate-900/70 p-8 text-center">
-                  <p className="text-slate-300">No jobs posted yet</p>
-                  <p className="mt-2 text-sm text-slate-400">
-                    Start posting jobs to find the right talent for your company
-                  </p>
-                  <Link href="/jobs/post">
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="mt-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:shadow-xl"
-                    >
-                      Post Your First Job
-                    </motion.button>
-                  </Link>
-                </div>
-              ) : (
-                <div className="mt-6 grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                  {employerJobs.slice(0, 6).map((job, index) => (
+            ) : (
+              <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                {employerJobs.slice(0, 6).map((job, index) => (
+                  <Link key={job._id} href={`/jobs/${job._id}`}>
                     <motion.article
-                      key={job._id}
                       initial={{ opacity: 0, y: 30 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.45, delay: index * 0.1 }}
@@ -489,456 +388,373 @@ const DashboardPage: FC = () => {
                             {skill}
                           </span>
                         ))}
-                        {job.requiredSkills &&
-                          job.requiredSkills.length > 3 && (
-                            <span className="rounded-full bg-white/10 px-3 py-1 text-slate-400">
-                              +{job.requiredSkills.length - 3} more
-                            </span>
-                          )}
                       </div>
-                      <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
-                        <span>{job.track}</span>
-                        <span>{job.experienceLevel}</span>
-                      </div>
-                      <Link href={`/jobs/${job._id}`}>
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          className="mt-5 w-full inline-flex items-center justify-center rounded-xl border border-white/20 px-4 py-2 text-sm font-medium text-white transition hover:border-white/40"
-                        >
-                          View Details
-                        </motion.button>
-                      </Link>
                     </motion.article>
-                  ))}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </motion.section>
+        </section>
+      </motion.div>
+    );
+  }
+
+  // Job Seeker Dashboard (Enhanced)
+  const stats = dashboardData?.stats || {
+    skillsCount: 0,
+    savedCourses: 0,
+    savedJobs: 0,
+    missingSkillsCount: 0,
+  };
+
+  // Show loading state for job seeker dashboard
+  if (loadingDashboard && !dashboardData) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+        <div className="text-center">
+          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
+          <p>Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error && !dashboardData) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white p-6">
+        <div className="text-center max-w-md">
+          <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
+          <h2 className="mb-2 text-xl font-semibold">
+            Error Loading Dashboard
+          </h2>
+          <p className="mb-4 text-slate-300">{error}</p>
+          <button
+            onClick={() => {
+              setError(null);
+              if (userType === "job_seeker") {
+                fetchDashboardData();
+              } else {
+                fetchUserProfile();
+                fetchEmployerJobs();
+              }
+            }}
+            className="rounded-xl bg-blue-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-600"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      variants={pageFade}
+      initial="hidden"
+      animate="visible"
+      className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10`}
+    >
+      <section className="mx-auto flex max-w-7xl flex-col gap-6 sm:gap-8 lg:gap-10">
+        {/* Error Banner */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl border border-red-500/50 bg-red-500/10 p-4 text-red-200"
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" />
+              <span>{error}</span>
+              <button
+                onClick={() => setError(null)}
+                className="ml-auto text-red-300 hover:text-red-100"
+              >
+                ×
+              </button>
+            </div>
+          </motion.div>
+        )}
+        {/* Hero Section */}
+        <motion.div
+          variants={cardVariants}
+          initial="hidden"
+          animate="visible"
+          custom={0}
+          className="rounded-3xl border border-white/10 bg-gradient-to-r from-blue-500/10 to-purple-500/10 p-8 backdrop-blur-xl shadow-xl"
+        >
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1
+                className={`${inter.className} mb-2 text-3xl font-bold sm:text-4xl md:text-5xl`}
+              >
+                Welcome back,{" "}
+                {dashboardData?.user?.name || authUser?.name || "User"}! 👋
+              </h1>
+              <div className="flex items-center gap-2 text-lg text-slate-300">
+                <span className="inline-block min-w-[280px]">
+                  {typingText}
+                  <span className="cursor-blink">|</span>
+                </span>
+                <Sparkles className="h-5 w-5 text-blue-400" />
+              </div>
+            </div>
+            <div className="relative h-24 w-24 overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-br from-blue-400/40 to-purple-500/20 p-[2px]">
+              <Image
+                src={
+                  dashboardData?.user?.image || authUser?.image || "/avatar.jpg"
+                }
+                alt={dashboardData?.user?.name || authUser?.name || "User"}
+                fill
+                className="rounded-2xl object-cover"
+                sizes="96px"
+              />
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Stats Grid */}
+        <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
+          {[
+            {
+              label: "Skills",
+              value: stats.skillsCount,
+              icon: Award,
+              color: "from-blue-500 to-cyan-500",
+            },
+            {
+              label: "Saved Courses",
+              value: stats.savedCourses,
+              icon: BookOpen,
+              color: "from-purple-500 to-pink-500",
+            },
+            {
+              label: "Saved Jobs",
+              value: stats.savedJobs,
+              icon: Briefcase,
+              color: "from-emerald-500 to-teal-500",
+            },
+            {
+              label: "Missing Skills",
+              value: stats.missingSkillsCount,
+              icon: AlertCircle,
+              color: "from-amber-500 to-orange-500",
+            },
+          ].map((stat, index) => {
+            const Icon = stat.icon;
+            return (
+              <motion.div
+                key={stat.label}
+                variants={cardVariants}
+                initial="hidden"
+                animate="visible"
+                custom={index}
+                whileHover={{ scale: 1.05, y: -4 }}
+                className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl shadow-xl transition"
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <Icon className={`h-6 w-6 text-white`} />
+                  <div
+                    className={`h-12 w-12 rounded-xl bg-gradient-to-r ${stat.color} opacity-20`}
+                  />
                 </div>
-              )}
-            </motion.section>
-          </>
-        ) : (
-          // Job Seeker Dashboard (existing content)
-          <>
+                <div className="text-3xl font-bold text-white">
+                  {stat.value}
+                </div>
+                <div className="text-sm text-slate-400">{stat.label}</div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1fr,1fr]">
+          {/* Left Column: Roadmap Preview */}
+          {dashboardData?.roadmapPreview && (
             <motion.div
               variants={cardVariants}
               initial="hidden"
               animate="visible"
-              custom={0}
-              className="grid gap-6 lg:grid-cols-[1.2fr,1fr]"
+              custom={5}
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl shadow-xl lg:p-8"
             >
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur lg:p-8">
-                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="relative h-20 w-20 overflow-hidden rounded-2xl border border-white/15 bg-linear-to-br from-blue-400/40 to-purple-500/20 p-[2px]">
-                      <Image
-                        src={user.image}
-                        alt={user.name}
-                        fill
-                        className="rounded-2xl object-cover"
-                        sizes="80px"
-                      />
-                    </div>
-                    <div>
-                      <h2
-                        className={`${inter.className} text-xl font-semibold text-white sm:text-2xl`}
-                      >
-                        {user.name}
-                      </h2>
-                      <p className="text-sm text-slate-300">{user.email}</p>
-                    </div>
-                  </div>
-                  <Link href="/profile">
-                    <motion.button
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      className="inline-flex items-center justify-center rounded-xl bg-linear-to-r from-[#2563EB] to-[#9333EA] px-4 py-2 text-sm font-semibold shadow-lg shadow-blue-900/40 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400"
-                    >
-                      Edit Profile
-                    </motion.button>
-                  </Link>
-                </div>
-
-                <div className="mt-6 grid gap-4 text-sm text-slate-200 md:grid-cols-2">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                      Education
-                    </p>
-                    <p className="mt-1">
-                      {user.education || (
-                        <span className="text-slate-500 italic">
-                          Not set - Please update your profile
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                      Experience Level
-                    </p>
-                    <p className="mt-1">
-                      {user.experienceLevel || (
-                        <span className="text-slate-500 italic">
-                          Not set - Please update your profile
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                      Preferred Track
-                    </p>
-                    <p className="mt-1">
-                      {user.preferredTrack || (
-                        <span className="text-slate-500 italic">
-                          Not set - Please update your profile
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                      Profile Completion
-                    </p>
-                    <div className="mt-2 h-2 rounded-full bg-white/10">
-                      <div
-                        className="h-2 rounded-full bg-linear-to-r from-[#2563EB] to-[#9333EA]"
-                        style={{ width: `${user.profileCompletion}%` }}
-                      />
-                    </div>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {user.profileCompletion}% completed
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur lg:p-8">
-                <div className="flex items-center justify-between">
-                  <h3
-                    className={`${inter.className} text-lg font-semibold text-white`}
+              <div className="mb-4 flex items-center justify-between">
+                <h2
+                  className={`${inter.className} text-xl font-semibold text-white`}
+                >
+                  Roadmap Preview
+                </h2>
+                <Link href="/roadmap">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
                   >
-                    Your Skills
-                  </h3>
-                  <Link href="/profile">
-                    <motion.button
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-white/90 transition hover:border-white/30"
-                    >
-                      Edit Profile
-                    </motion.button>
-                  </Link>
+                    Continue Roadmap
+                    <ArrowRight className="h-4 w-4" />
+                  </motion.button>
+                </Link>
+              </div>
+              <div className="prose prose-invert max-w-none">
+                <div className="text-sm leading-relaxed text-slate-300 whitespace-pre-line line-clamp-8">
+                  {formatRoadmapPreview(dashboardData.roadmapPreview)}
                 </div>
-
-                {user.skills.length > 0 ? (
-                  <div className="mt-5 grid gap-3 grid-cols-1 sm:grid-cols-2">
-                    {skillsColumns.map((column, columnIndex) => (
-                      <div
-                        key={`column-${columnIndex}`}
-                        className="flex flex-wrap gap-2"
-                      >
-                        {column.map((skill: string) => (
-                          <span
-                            key={skill}
-                            className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-white/90"
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-6 text-center">
-                    <p className="text-sm text-slate-400">
-                      No skills added yet.{" "}
-                      <Link
-                        href="/profile"
-                        className="text-blue-400 transition hover:text-blue-300 underline"
-                      >
-                        Add your skills
-                      </Link>{" "}
-                      to get personalized recommendations.
-                    </p>
-                  </div>
-                )}
               </div>
             </motion.div>
+          )}
 
-            <motion.section
+          {/* Right Column: Top Job Matches */}
+          {dashboardData?.bestJobs && dashboardData.bestJobs.length > 0 && (
+            <motion.div
               variants={cardVariants}
               initial="hidden"
               animate="visible"
-              custom={1}
-              className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur lg:p-8"
+              custom={6}
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl shadow-xl lg:p-8"
             >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h3
-                    className={`${inter.className} text-lg font-semibold text-white`}
-                  >
-                    Recommended Jobs
-                  </h3>
-                  <p className="text-sm text-slate-300">
-                    Tailored opportunities based on your skills and goals.
-                  </p>
-                </div>
-                <Link
-                  href="/jobs"
-                  className="text-sm text-blue-300 transition hover:text-blue-200"
+              <div className="mb-4 flex items-center justify-between">
+                <h2
+                  className={`${inter.className} text-xl font-semibold text-white`}
                 >
-                  View all jobs →
+                  Top Job Matches
+                </h2>
+                <Link href="/jobs">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                  >
+                    View All
+                    <ArrowRight className="h-4 w-4" />
+                  </motion.button>
                 </Link>
               </div>
-
-              {loadingJobs ? (
-                <div className="mt-6 flex items-center justify-center py-12">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
-                </div>
-              ) : recommendedJobs.length === 0 ? (
-                <div className="mt-6 rounded-xl border border-white/10 bg-slate-900/70 p-8 text-center">
-                  <p className="text-slate-300">
-                    No job recommendations available
-                  </p>
-                  <p className="mt-2 text-sm text-slate-400">
-                    Update your skills and preferred track to get personalized
-                    recommendations
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-6 grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                  {recommendedJobs.map((job, index) => (
+              <div className="space-y-4">
+                {dashboardData.bestJobs.slice(0, 3).map((job, index) => (
+                  <Link key={job._id} href={`/jobs/${job._id}`}>
                     <motion.article
-                      key={job._id}
-                      initial={{ opacity: 0, y: 30 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: "-100px" }}
-                      transition={{ duration: 0.45, delay: index * 0.1 }}
-                      className="flex flex-col rounded-2xl border border-white/10 bg-slate-900/70 p-5 shadow-lg shadow-blue-950/20 transition hover:border-white/20"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      whileHover={{ x: 4 }}
+                      className="rounded-xl border border-white/10 bg-slate-900/70 p-4 transition hover:border-white/20"
                     >
-                      <header>
-                        <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                          {job.company}
-                        </p>
-                        <h4
-                          className={`${inter.className} mt-2 text-lg font-semibold text-white`}
-                        >
-                          {job.title}
-                        </h4>
-                        <p className="mt-1 text-sm text-slate-300">
-                          {job.jobType} • {job.location}
-                        </p>
-                      </header>
-                      {job.matchReason && (
-                        <div className="mt-3 rounded-lg bg-blue-500/10 border border-blue-500/20 p-2">
-                          <p className="text-xs text-blue-200">
-                            {job.matchReason}
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3
+                            className={`${inter.className} text-lg font-semibold text-white`}
+                          >
+                            {job.title}
+                          </h3>
+                          <p className="text-sm text-slate-300">
+                            {job.company}
                           </p>
+                          <div className="mt-2 flex items-center gap-4 text-xs text-slate-400">
+                            <span>{job.location}</span>
+                            <span>•</span>
+                            <span>{job.jobType}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="mb-1 text-lg font-bold text-emerald-400">
+                            {job.matchScore}%
+                          </div>
+                          <div className="text-xs text-slate-400">Match</div>
+                        </div>
+                      </div>
+                      {job.missingSkills && job.missingSkills.length > 0 && (
+                        <div className="mt-3 flex items-center gap-2 text-xs text-amber-400">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>
+                            {job.missingSkills.length} skills to learn
+                          </span>
                         </div>
                       )}
-                      <div className="mt-4 flex flex-wrap gap-1.5 sm:gap-2 text-xs text-slate-200">
-                        {(job.matchedSkills || []).slice(0, 3).map((skill) => (
-                          <span
-                            key={skill}
-                            className="rounded-full bg-white/10 px-3 py-1"
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                        {job.requiredSkills &&
-                          job.requiredSkills.length >
-                            (job.matchedSkills?.length || 0) && (
-                            <span className="rounded-full bg-white/10 px-3 py-1 text-slate-400">
-                              +
-                              {job.requiredSkills.length -
-                                (job.matchedSkills?.length || 0)}{" "}
-                              more
-                            </span>
-                          )}
-                      </div>
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between text-xs text-slate-400">
-                          <span>Match Score</span>
-                          <span>{job.matchScore || 0}%</span>
-                        </div>
-                        <div className="mt-2 h-2 rounded-full bg-white/10">
-                          <div
-                            className="h-2 rounded-full bg-linear-to-r from-[#2563EB] via-indigo-500 to-[#9333EA]"
-                            style={{ width: `${job.matchScore || 0}%` }}
-                          />
-                        </div>
-                      </div>
-                      <Link href={`/jobs/${job._id}`}>
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          className="mt-5 w-full inline-flex items-center justify-center rounded-xl border border-white/20 px-4 py-2 text-sm font-medium text-white transition hover:border-white/40"
-                        >
-                          View Details
-                        </motion.button>
-                      </Link>
                     </motion.article>
-                  ))}
-                </div>
-              )}
-            </motion.section>
+                  </Link>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </div>
 
-            <motion.section
+        {/* Recommended Courses */}
+        {dashboardData?.recommendedCourses &&
+          dashboardData.recommendedCourses.length > 0 && (
+            <motion.div
               variants={cardVariants}
               initial="hidden"
               animate="visible"
-              custom={2}
-              className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur lg:p-8"
+              custom={7}
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl shadow-xl lg:p-8"
             >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h3
-                    className={`${inter.className} text-lg font-semibold text-white`}
-                  >
-                    Learning Resources
-                  </h3>
-                  <p className="text-sm text-slate-300">
-                    Keep growing with curated courses and challenges.
-                  </p>
-                </div>
-                <Link
-                  href="/resources"
-                  className="text-sm text-blue-300 transition hover:text-blue-200"
+              <div className="mb-6 flex items-center justify-between">
+                <h2
+                  className={`${inter.className} text-xl font-semibold text-white`}
                 >
-                  See all resources →
+                  Recommended Courses
+                </h2>
+                <Link href="/resources">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                  >
+                    View All
+                    <ArrowRight className="h-4 w-4" />
+                  </motion.button>
                 </Link>
               </div>
-
-              {loadingResources ? (
-                <div className="mt-6 flex items-center justify-center py-12">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
-                </div>
-              ) : recommendedResources.length === 0 ? (
-                <div className="mt-6 rounded-xl border border-white/10 bg-slate-900/70 p-8 text-center">
-                  <p className="text-slate-300">
-                    No resource recommendations available
-                  </p>
-                  <p className="mt-2 text-sm text-slate-400">
-                    Update your skills and preferred track to get personalized
-                    recommendations
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-6 grid gap-4 sm:gap-5 grid-cols-1 md:grid-cols-2">
-                  {recommendedResources.map((resource, index) => (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {dashboardData.recommendedCourses
+                  .slice(0, 3)
+                  .map((course, index) => (
                     <motion.article
-                      key={resource._id}
+                      key={course._id}
                       initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.4, delay: index * 0.1 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
                       whileHover={{ y: -4, scale: 1.01 }}
                       className="flex flex-col rounded-2xl border border-white/10 bg-slate-900/70 p-5 transition hover:border-white/20"
                     >
-                      <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-400">
-                        <span>{resource.platform}</span>
+                      <div className="mb-3 flex items-center justify-between">
+                        <span className="text-xs uppercase tracking-wider text-slate-400">
+                          {course.platform}
+                        </span>
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] ${
-                            resource.cost === "Free"
-                              ? "border-emerald-400/40 text-emerald-200"
-                              : "border-amber-400/40 text-amber-200"
+                          className={`rounded-full border px-2 py-1 text-xs font-medium ${
+                            course.cost === "Free"
+                              ? "border-emerald-400/40 text-emerald-200 bg-emerald-500/10"
+                              : "border-amber-400/40 text-amber-200 bg-amber-500/10"
                           }`}
                         >
-                          {resource.cost}
+                          {course.cost}
                         </span>
                       </div>
-                      <h4
-                        className={`${inter.className} mt-3 text-lg font-semibold text-white`}
+                      <h3
+                        className={`${inter.className} mb-2 text-lg font-semibold text-white`}
                       >
-                        {resource.title}
-                      </h4>
-                      {resource.matchReason && (
-                        <div className="mt-2 rounded-lg bg-purple-500/10 border border-purple-500/20 p-2">
-                          <p className="text-xs text-purple-200">
-                            {resource.matchReason}
-                          </p>
-                        </div>
+                        {course.title}
+                      </h3>
+                      {course.description && (
+                        <p className="mb-4 line-clamp-2 text-sm text-slate-300">
+                          {course.description}
+                        </p>
                       )}
-                      <div className="mt-3 flex flex-wrap gap-1.5 sm:gap-2 text-xs text-slate-200">
-                        {(resource.matchedSkills || [])
-                          .slice(0, 3)
-                          .map((skill) => (
-                            <span
-                              key={skill}
-                              className="rounded-full bg-white/10 px-3 py-1"
-                            >
-                              {skill}
-                            </span>
-                          ))}
-                        {resource.relatedSkills &&
-                          resource.relatedSkills.length >
-                            (resource.matchedSkills?.length || 0) && (
-                            <span className="rounded-full bg-white/10 px-3 py-1 text-slate-400">
-                              +
-                              {resource.relatedSkills.length -
-                                (resource.matchedSkills?.length || 0)}{" "}
-                              more
-                            </span>
-                          )}
-                      </div>
-                      {resource.matchScore && (
-                        <div className="mt-3">
-                          <div className="flex items-center justify-between text-xs text-slate-400">
-                            <span>Match Score</span>
-                            <span>{resource.matchScore}%</span>
-                          </div>
-                          <div className="mt-1 h-1.5 rounded-full bg-white/10">
-                            <div
-                              className="h-1.5 rounded-full bg-linear-to-r from-[#2563EB] to-[#9333EA]"
-                              style={{ width: `${resource.matchScore}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                      <motion.a
-                        href={resource.url}
+                      <a
+                        href={course.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-linear-to-r from-[#2563EB] to-[#9333EA] px-4 py-2 text-sm font-semibold text-white transition"
+                        className="mt-auto inline-flex items-center gap-2 text-sm text-blue-300 transition hover:text-blue-200"
                       >
                         Go to Course
                         <ExternalLink className="h-4 w-4" />
-                      </motion.a>
+                      </a>
                     </motion.article>
                   ))}
-                </div>
-              )}
-            </motion.section>
-
-            <motion.section
-              variants={cardVariants}
-              initial="hidden"
-              animate="visible"
-              custom={3}
-              className="rounded-3xl border border-white/10 bg-linear-to-r from-[#2563EB]/20 to-[#9333EA]/20 p-6 text-white backdrop-blur lg:p-8"
-            >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 className={`${inter.className} text-xl font-semibold`}>
-                    Career Insights
-                  </h3>
-                  <p className="mt-2 text-sm text-slate-100">
-                    You are missing 2 skills for your preferred Frontend
-                    Developer role.
-                  </p>
-                </div>
-                <motion.button
-                  whileHover={{ scale: 1.04 }}
-                  whileTap={{ scale: 0.97 }}
-                  className="inline-flex items-center justify-center rounded-xl border border-white/20 px-5 py-2 text-sm font-semibold transition hover:border-white/40"
-                >
-                  Learn Now
-                </motion.button>
               </div>
-            </motion.section>
-          </>
-        )}
+            </motion.div>
+          )}
       </section>
     </motion.div>
   );

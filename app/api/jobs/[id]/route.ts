@@ -3,6 +3,7 @@ import connectDB from "@/lib/mongodb";
 import Job from "@/models/Job";
 import User from "@/models/User";
 import { getAuthenticatedUser } from "@/lib/auth-middleware";
+import { calculateJobMatch } from "@/lib/job-matching";
 
 // GET - Get a single job by ID
 export async function GET(
@@ -17,6 +18,35 @@ export async function GET(
 
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
+    // Calculate match score if user is authenticated and is a job seeker
+    try {
+      const authResult = await getAuthenticatedUser(request);
+      if (!authResult.error && authResult.user) {
+        const dbUser = await User.findById(authResult.user.userId).select("-password");
+        if (dbUser && dbUser.userType === "job_seeker") {
+          const matchResult = calculateJobMatch(dbUser, job);
+          return NextResponse.json({
+            job: {
+              ...job.toObject(),
+              matchScore: matchResult.matchScore,
+              matchPercentage: matchResult.matchPercentage,
+              matchedSkills: matchResult.matchedSkills,
+              missingSkills: matchResult.missingSkills,
+              experienceMatch: matchResult.experienceMatch,
+              experienceMatchScore: matchResult.experienceMatchScore,
+              trackMatch: matchResult.trackMatch,
+              trackMatchScore: matchResult.trackMatchScore,
+              skillMatchScore: matchResult.skillMatchScore,
+              matchReasons: matchResult.matchReasons,
+            },
+          }, { status: 200 });
+        }
+      }
+    } catch (authError) {
+      // If auth fails, just return job without match scores
+      console.log("Auth check failed, returning job without match scores");
     }
 
     return NextResponse.json({ job }, { status: 200 });

@@ -203,7 +203,7 @@ export default function SignInPage() {
           <h1
             className={`${inter.className} mt-4 text-2xl font-semibold sm:text-3xl`}
           >
-            Welcome Back to NextGen Carrer
+            Welcome Back to NextGen Career
           </h1>
           <p className="mt-3 text-sm text-slate-300">
             Sign in to continue your career journey

@@ -204,7 +204,7 @@ export default function ResourcesPage() {
                   onChange={(e) =>
                     setFilters({ ...filters, platform: e.target.value })
                   }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
                 >
                   <option value="all">All Platforms</option>
                   {uniquePlatforms.map((platform) => (
@@ -224,7 +224,7 @@ export default function ResourcesPage() {
                   onChange={(e) =>
                     setFilters({ ...filters, cost: e.target.value })
                   }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
                 >
                   <option value="all">All Costs</option>
                   <option value="Free">Free</option>
@@ -241,7 +241,7 @@ export default function ResourcesPage() {
                   onChange={(e) =>
                     setFilters({ ...filters, level: e.target.value })
                   }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
                 >
                   <option value="all">All Levels</option>
                   <option value="Beginner">Beginner</option>
@@ -259,7 +259,7 @@ export default function ResourcesPage() {
                   onChange={(e) =>
                     setFilters({ ...filters, skill: e.target.value })
                   }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-blue-400/70 focus:outline-none focus:ring-2 focus:ring-blue-500/40 [&>option]:bg-slate-900 [&>option]:text-white"
                 >
                   <option value="all">All Skills</option>
                   {allSkills.map((skill) => (

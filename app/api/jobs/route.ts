@@ -3,6 +3,7 @@ import connectDB from "@/lib/mongodb";
 import Job from "@/models/Job";
 import User from "@/models/User";
 import { getAuthenticatedUser } from "@/lib/auth-middleware";
+import { calculateJobMatch } from "@/lib/job-matching";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,6 +15,7 @@ export async function GET(request: NextRequest) {
     const jobType = searchParams.get("jobType");
     const experienceLevel = searchParams.get("experienceLevel");
     const search = searchParams.get("search");
+    const includeMatch = searchParams.get("includeMatch") === "true";
 
     // Build filter object
     const filter: any = {};
@@ -44,6 +46,39 @@ export async function GET(request: NextRequest) {
     }
 
     const jobs = await Job.find(filter).sort({ createdAt: -1 });
+
+    // If includeMatch is true and user is authenticated, calculate match scores
+    if (includeMatch) {
+      try {
+        const authResult = await getAuthenticatedUser(request);
+        if (!authResult.error && authResult.user) {
+          const dbUser = await User.findById(authResult.user.userId).select("-password");
+          if (dbUser && dbUser.userType === "job_seeker") {
+            const jobsWithMatch = jobs.map((job) => {
+              const matchResult = calculateJobMatch(dbUser, job);
+              return {
+                ...job.toObject(),
+                matchScore: matchResult.matchScore,
+                matchPercentage: matchResult.matchPercentage,
+                matchedSkills: matchResult.matchedSkills,
+                missingSkills: matchResult.missingSkills,
+                experienceMatch: matchResult.experienceMatch,
+                trackMatch: matchResult.trackMatch,
+                matchReasons: matchResult.matchReasons,
+              };
+            });
+
+            // Sort by match score (highest first)
+            jobsWithMatch.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+
+            return NextResponse.json({ jobs: jobsWithMatch }, { status: 200 });
+          }
+        }
+      } catch (authError) {
+        // If auth fails, just return jobs without match scores
+        console.log("Auth check failed, returning jobs without match scores");
+      }
+    }
 
     return NextResponse.json({ jobs }, { status: 200 });
   } catch (error) {
