@@ -111,7 +111,7 @@ export const authConfig = {
       }
       return true;
     },
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger }) {
       // Initial sign in - set user data from provider
       if (user) {
         token.id = user.id || token.sub || "";
@@ -122,7 +122,8 @@ export const authConfig = {
         if (user.userType) {
           token.userType = user.userType;
         }
-        // Role selection removed
+        // Set token expiration timestamp (30 days from now)
+        token.exp = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60);
       }
 
       // Always ensure userType is set by fetching from database if missing
@@ -165,6 +166,11 @@ export const authConfig = {
         } catch (error) {
           console.error("Error fetching user in JWT callback:", error);
         }
+      }
+
+      // Update token expiration on session update to prevent premature expiration
+      if (trigger === "update") {
+        token.exp = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60);
       }
 
       // Role selection removed - users default to job_seeker and can change in profile
@@ -217,6 +223,39 @@ export const authConfig = {
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60, // Update session every 24 hours to refresh token
+  },
+  cookies: {
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production", // Only secure in production
+        maxAge: 30 * 24 * 60 * 60, // 30 days
+      },
+    },
+    callbackUrl: {
+      name: `next-auth.callback-url`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60, // 30 days
+      },
+    },
+    csrfToken: {
+      name: `next-auth.csrf-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24, // 24 hours for CSRF token
+      },
+    },
   },
 } satisfies NextAuthConfig;
 
