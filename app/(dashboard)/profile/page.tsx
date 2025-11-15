@@ -460,13 +460,6 @@ export default function ProfilePage() {
             Update your skills and career preferences to get personalized
             recommendations
           </p>
-          <Link
-            href="/cv-extract"
-            className="mt-4 inline-flex items-center gap-2 rounded-xl border border-blue-400/30 bg-blue-500/20 px-4 py-2 text-sm font-semibold text-blue-200 transition hover:bg-blue-500/30"
-          >
-            <FileText className="h-4 w-4" />
-            Extract Skills from CV
-          </Link>
         </motion.div>
 
         {successMessage && (
@@ -916,88 +909,6 @@ export default function ProfilePage() {
                     </div>
                   </motion.div>
                 )}
-              </div>
-
-              {/* CV Upload Section */}
-              <div className="mb-8">
-                <label
-                  className={`${inter.className} mb-3 block text-lg font-semibold text-white`}
-                >
-                  Upload CV (PDF)
-                </label>
-                <p className="mb-4 text-sm text-slate-400">
-                  Upload your CV in PDF format. Maximum file size: 10MB.
-                </p>
-                
-                {cvFile ? (
-                  <div className="mb-4 rounded-xl border border-white/10 bg-slate-900/70 p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-5 w-5 text-blue-400" />
-                        <div>
-                          <p className="text-sm font-medium text-white">CV Uploaded</p>
-                          <a
-                            href={cvFile}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-400 hover:text-blue-300 transition"
-                          >
-                            View CV
-                          </a>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <motion.a
-                          href={cvFile}
-                          download
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          className="rounded-lg border border-white/10 bg-white/5 p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
-                        >
-                          <Download className="h-4 w-4" />
-                        </motion.a>
-                        <motion.button
-                          type="button"
-                          onClick={handleDeleteCV}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-red-300 transition hover:bg-red-500/20 hover:text-red-200"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </motion.button>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="flex items-center gap-4">
-                  <input
-                    type="file"
-                    id="cv-upload"
-                    accept="application/pdf"
-                    onChange={handleCVFileChange}
-                    className="hidden"
-                  />
-                  <label
-                    htmlFor="cv-upload"
-                    className="flex items-center gap-2 px-6 py-3 rounded-xl border border-white/20 bg-white/5 hover:bg-white/10 cursor-pointer transition"
-                  >
-                    <Upload className="h-5 w-5" />
-                    {selectedCVFile ? selectedCVFile.name : "Choose PDF File"}
-                  </label>
-                  {selectedCVFile && (
-                    <motion.button
-                      type="button"
-                      onClick={handleUploadCV}
-                      disabled={uploadingCV}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 px-6 py-3 text-sm font-semibold text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {uploadingCV ? "Uploading..." : "Upload CV"}
-                    </motion.button>
-                  )}
-                </div>
               </div>
 
               {/* Skills Selection */}

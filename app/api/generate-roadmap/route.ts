@@ -85,50 +85,89 @@ export async function POST(request: NextRequest) {
 
     const systemPrompt = `You are a senior career mentor with 20+ years of experience in tech and career development. You create highly detailed, actionable, and motivating career roadmaps that help users achieve their career goals. Your roadmaps are practical, realistic, and broken down into clear phases with specific deliverables.`;
 
-    const prompt = `Create a comprehensive career roadmap for a job seeker with the following details:
+    const prompt = `Create a comprehensive ${timeline} career roadmap for a job seeker based on their CURRENT TECH STACK and career goals.
 
-CURRENT SKILLS: ${skillsText}
+**CRITICAL: Build the roadmap around the user's existing tech stack and fill gaps to reach the target role.**
+
+CURRENT TECH STACK (SKILLS YOU ALREADY HAVE): ${skillsText}
 EXPERIENCE LEVEL: ${userExperience}
 EDUCATION: ${userEducation}
-PREFERRED TRACK: ${preferredTrack}
+PREFERRED TRACK/CAREER PATH: ${preferredTrack}
 TARGET ROLE: ${targetRole}
 TIMELINE: ${timeline}
 DAILY LEARNING HOURS: ${dailyHoursText}
 
 ROADMAP REQUIREMENTS:
-1. Structure the roadmap into clear phases (for 3-month: 12 weeks, for 6-month: 24 weeks)
-2. For each week/phase, include:
-   - **Learning Topics**: Specific technologies, concepts, or skills to master
-   - **Projects**: 1-2 practical project ideas to build (describe what to build, not just the name)
-   - **Practice Tasks**: Daily or weekly exercises to reinforce learning
-   - **Resources**: Learning platforms and resource types (NO specific URLs - just mention types like "online courses", "documentation", "YouTube tutorials", etc.)
-   - **Checkpoints**: Clear success criteria to verify learning
 
-3. Include a dedicated section on "When to Start Applying" with:
-   - Specific timing (e.g., "Start applying in Week X")
-   - What skills/projects should be completed before applying
-   - Portfolio requirements
-   - Resume preparation tips
+1. **Tech Stack Analysis**: 
+   - Acknowledge and build upon the user's existing skills from their tech stack
+   - Identify gaps between current tech stack and target role requirements
+   - Create a learning path that enhances existing skills and adds missing ones
+   - For 6-month roadmap: Go deeper into each technology, include advanced concepts, best practices, and real-world applications
 
-4. Format the output using Markdown:
-   - Use # for main title
-   - Use ## for major sections (e.g., "Phase 1: Foundation", "Phase 2: Intermediate")
-   - Use ### for weekly sections (e.g., "Week 1: Introduction to...")
-   - Use #### for subsections (Learning Topics, Projects, etc.)
+2. **Structure the roadmap**:
+   - For 6-month: Divide into 24 weeks (6 months) organized into 4-6 major phases
+   - For 3-month: Divide into 12 weeks (3 months) organized into 3-4 major phases
+   - Each phase should build on the previous one and leverage existing tech stack knowledge
+
+3. **For each week/phase, include**:
+   - **Learning Topics**: Specific technologies, concepts, or skills to master (prioritize missing skills, then advanced concepts in existing stack)
+   - **Projects**: 2-3 practical project ideas that use BOTH existing tech stack AND new skills being learned
+   - **Practice Tasks**: Daily or weekly exercises that reinforce learning
+   - **Resources**: Learning platforms and resource types (NO specific URLs - just mention types like "online courses", "official documentation", "YouTube tutorials", "coding challenges", etc.)
+   - **Checkpoints**: Clear success criteria to verify learning progress
+
+4. **Tech Stack Integration**:
+   - Show how existing skills connect with new skills
+   - Suggest projects that combine multiple technologies from the user's stack
+   - Provide learning paths that are synergistic (e.g., if they know JavaScript, recommend Node.js before Python)
+   - Include exercises that strengthen existing skills while learning new ones
+
+5. **For 6-month roadmap specifically**:
+   - Include deeper dives into each technology
+   - Add advanced topics and best practices
+   - Include performance optimization, testing, deployment, and production-ready concepts
+   - Cover system design, architecture patterns, and scalability considerations
+   - Include portfolio-building projects of increasing complexity
+
+6. **Include a dedicated section on "When to Start Applying"**:
+   - Specific timing (e.g., "Start applying in Week 18-20" for 6-month, or "Week 10-12" for 3-month)
+   - What skills/projects should be completed before applying (minimum viable skillset)
+   - Portfolio requirements (3-5 projects showcasing tech stack)
+   - Resume preparation tips tailored to the tech stack
+
+7. **Format the output using Markdown**:
+   - Use # for main title (e.g., "# 6-Month Career Roadmap: ${targetRole}")
+   - Use ## for major phases (e.g., "## Phase 1: Building on Your Tech Stack (Weeks 1-4)")
+   - Use ### for weekly sections (e.g., "### Week 1: [Topic] - Leveraging ${skillsText.split(',')[0]} and Learning [New Skill]")
+   - Use #### for subsections (Learning Topics, Projects, Practice Tasks, etc.)
    - Use bullet points (- or •) for lists
-   - Use **bold** for emphasis on key terms
+   - Use **bold** for emphasis on key terms and technologies
 
-5. Make it motivating and realistic:
-   - Acknowledge the journey ahead
+8. **Make it motivating and realistic**:
+   - Acknowledge their existing tech stack as a strong foundation
+   - Show how their current skills are valuable and will accelerate learning
    - Provide encouragement throughout
-   - Include tips for staying motivated
+   - Include tips for staying motivated over 6 months
    - End with an inspiring conclusion
 
-6. Be specific and actionable:
-   - Instead of "Learn JavaScript", say "Learn JavaScript fundamentals: variables, functions, arrays, objects, ES6 features (let/const, arrow functions, destructuring)"
-   - Instead of "Build a project", say "Build a Todo List app with add, delete, edit, and filter functionality using vanilla JavaScript"
+9. **Be extremely specific and actionable**:
+   - Instead of "Learn JavaScript", say "Master JavaScript fundamentals: variables, functions, arrays, objects, ES6+ features (let/const, arrow functions, destructuring, async/await, promises)"
+   - Instead of "Build a project", say "Build a Full-Stack Todo App: Frontend with React (using your existing ${skillsText.includes('React') ? 'React' : 'JavaScript'} knowledge), Backend with Node.js/Express, Database with MongoDB, Authentication with JWT"
+   - List specific concepts, methods, patterns, and tools to learn each week
 
-IMPORTANT: Return ONLY the roadmap text in Markdown format. Do NOT include code blocks, JSON, or any other wrapper. Start directly with the roadmap content.`;
+10. **Tech Stack Progression**:
+    - Week 1-4: Strengthen existing skills + foundational new skills
+    - Week 5-12: Integrate existing and new skills in projects
+    - Week 13-18: Advanced concepts and production-ready applications
+    - Week 19-24: Portfolio completion, interview preparation, and job application
+
+IMPORTANT: 
+- Focus heavily on building from the existing tech stack: ${skillsText}
+- Make the roadmap personalized to bridge gaps between current stack and ${targetRole} requirements
+- Return ONLY the roadmap text in Markdown format
+- Do NOT include code blocks, JSON, or any other wrapper
+- Start directly with the roadmap title and content`;
 
     // Generate roadmap using Gemini
     let roadmapText = await generateText(prompt, systemPrompt, {

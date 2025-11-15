@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
     const { user } = authResult;
     const { searchParams } = new URL(request.url);
     const trackFilter = searchParams.get("track"); // Optional: filter by specific track
+    const analyzeAll = searchParams.get("all") === "true"; // Option to analyze all jobs
 
     await connectDB();
 
@@ -83,11 +84,11 @@ export async function GET(request: NextRequest) {
     const preferredTrack = dbUser.preferredTrack;
     const experienceLevel = dbUser.experienceLevel;
 
-    // Fetch jobs (filter by track if specified, or use user's preferred track)
-    const trackToFilter = trackFilter || preferredTrack;
+    // Fetch jobs - only filter by track if explicitly requested, otherwise analyze ALL jobs
     const jobQuery: any = {};
-    if (trackToFilter) {
-      jobQuery.track = { $regex: new RegExp(trackToFilter, "i") };
+    if (!analyzeAll && trackFilter) {
+      // Filter by track only if explicitly specified in query parameter
+      jobQuery.track = { $regex: new RegExp(trackFilter, "i") };
     }
 
     const allJobs = await Job.find(jobQuery);
@@ -95,8 +96,8 @@ export async function GET(request: NextRequest) {
     if (allJobs.length === 0) {
       return NextResponse.json(
         { 
-          error: trackToFilter 
-            ? `No jobs found for track: ${trackToFilter}` 
+          error: trackFilter 
+            ? `No jobs found for track: ${trackFilter}` 
             : "No jobs found in the database"
         },
         { status: 404 }

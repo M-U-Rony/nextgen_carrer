@@ -29,7 +29,6 @@ const fadeIn = {
 const gradientBackground =
   "bg-[radial-gradient(circle_at_20%_20%,#2563EB22,transparent_55%),radial-gradient(circle_at_80%_0%,#9333EA22,transparent_60%),linear-gradient(115deg,#020617,#0f172a)]";
 
-
 export default function RoadmapPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -38,12 +37,8 @@ export default function RoadmapPage() {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  // Auto-generated roadmap state
-  const [targetRole, setTargetRole] = useState("");
   const [userSkills, setUserSkills] = useState<string[]>([]);
-  const [preferredTrack, setPreferredTrack] = useState<string>("");
-  const [autoGenerating, setAutoGenerating] = useState(false);
+  const [targetRole, setTargetRole] = useState<string>("");
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -51,17 +46,18 @@ export default function RoadmapPage() {
       return;
     }
     if (isAuthenticated) {
-      fetchUserProfileAndGenerate();
+      fetchUserProfileAndGenerateRoadmap();
     }
   }, [isAuthenticated, authLoading, router]);
 
-  const determineTargetRole = (skills: string[], preferredTrack?: string): string => {
-    // First try to match based on preferredTrack
+  const detectTargetRoleFromSkills = (skills: string[], preferredTrack?: string): string => {
+    // First try preferred track
     if (preferredTrack) {
       const trackToRole: Record<string, string> = {
         "frontend": "Frontend Developer",
         "backend": "Backend Developer",
         "fullstack": "Full Stack Developer",
+        "full stack": "Full Stack Developer",
         "data": "Data Analyst",
         "data-science": "Data Scientist",
         "design": "UI/UX Designer",
@@ -77,86 +73,26 @@ export default function RoadmapPage() {
       }
     }
 
-    // If no preferredTrack match, try to infer from skills
-    const skillKeywords: Record<string, string> = {
-      "react": "Frontend Developer",
-      "vue": "Frontend Developer",
-      "angular": "Frontend Developer",
-      "node": "Backend Developer",
-      "express": "Backend Developer",
-      "python": "Backend Developer",
-      "django": "Backend Developer",
-      "flask": "Backend Developer",
-      "java": "Backend Developer",
-      "spring": "Backend Developer",
-      "sql": "Backend Developer",
-      "mongodb": "Backend Developer",
-      "postgresql": "Backend Developer",
-      "docker": "DevOps Engineer",
-      "kubernetes": "DevOps Engineer",
-      "aws": "Cloud Architect",
-      "azure": "Cloud Architect",
-      "gcp": "Cloud Architect",
-      "machine learning": "Machine Learning Engineer",
-      "ml": "Machine Learning Engineer",
-      "tensorflow": "Machine Learning Engineer",
-      "pytorch": "Machine Learning Engineer",
-      "data": "Data Analyst",
-      "analytics": "Data Analyst",
-      "tableau": "Data Analyst",
-      "powerbi": "Data Analyst",
-    };
-
-    const lowerSkills = skills.map(s => s.toLowerCase()).join(" ");
-    for (const [keyword, role] of Object.entries(skillKeywords)) {
-      if (lowerSkills.includes(keyword.toLowerCase())) {
-        return role;
-      }
-    }
-
-    // Default to Full Stack Developer if no match
-    return "Full Stack Developer";
+    // Analyze skills to determine role
+    const skillsLower = skills.map(s => s.toLowerCase());
+    
+    const frontendSkills = ["react", "vue", "angular", "html", "css", "javascript", "typescript", "next.js", "tailwind"];
+    const backendSkills = ["node.js", "express", "python", "django", "flask", "java", "spring", "php", "ruby"];
+    const dataSkills = ["python", "sql", "pandas", "numpy", "tableau", "power bi"];
+    
+    const hasFrontend = frontendSkills.some(skill => skillsLower.some(s => s.includes(skill)));
+    const hasBackend = backendSkills.some(skill => skillsLower.some(s => s.includes(skill)));
+    const hasData = dataSkills.some(skill => skillsLower.some(s => s.includes(skill)));
+    
+    if (hasFrontend && hasBackend) return "Full Stack Developer";
+    if (hasFrontend) return "Frontend Developer";
+    if (hasBackend) return "Backend Developer";
+    if (hasData) return "Data Analyst";
+    
+    return "Software Engineer";
   };
 
-  const generateRoadmapAuto = async (role: string, skills: string[]) => {
-    if (!role || skills.length === 0) {
-      return;
-    }
-
-    setAutoGenerating(true);
-    try {
-      const token = getToken();
-      const response = await fetch("/api/generate-roadmap", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          targetRole: role,
-          timeline: "6-month",
-          dailyHours: undefined,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        setRoadmap(data.roadmapText);
-        setTargetRole(role);
-        toast.success("Roadmap generated successfully!");
-      } else {
-        toast.error(data.error || "Failed to generate roadmap");
-      }
-    } catch (error) {
-      console.error("Error generating roadmap:", error);
-      toast.error("Failed to generate roadmap");
-    } finally {
-      setAutoGenerating(false);
-    }
-  };
-
-  const fetchUserProfileAndGenerate = async () => {
+  const fetchUserProfileAndGenerateRoadmap = async () => {
     try {
       setLoading(true);
       const token = getToken();
@@ -168,27 +104,24 @@ export default function RoadmapPage() {
 
       const data = await response.json();
       if (response.ok && data.user) {
-        // Set user skills and preferred track
-        const skills = data.user.skills && Array.isArray(data.user.skills) ? data.user.skills : [];
+        const skills = data.user.skills || [];
         setUserSkills(skills);
-        
-        if (data.user.preferredTrack) {
-          setPreferredTrack(data.user.preferredTrack);
+
+        // Check if roadmap already exists
+        if (data.user.roadmap) {
+          setRoadmap(data.user.roadmap);
+          setLoading(false);
+          return;
         }
 
-        // Always auto-generate a fresh 6-month roadmap based on current tech stack
+        // Auto-generate if skills exist
         if (skills.length > 0) {
-          const determinedRole = determineTargetRole(skills, data.user.preferredTrack);
-          setTargetRole(determinedRole);
-          setLoading(false);
-          // Auto-generate 6-month roadmap based on current tech stack
-          await generateRoadmapAuto(determinedRole, skills);
+          const role = detectTargetRoleFromSkills(skills, data.user.preferredTrack);
+          setTargetRole(role);
+          await autoGenerateRoadmap(role, skills);
         } else {
           setLoading(false);
-          // No skills - show message (already handled in UI)
         }
-      } else {
-        setLoading(false);
       }
     } catch (error) {
       console.error("Error fetching user profile:", error);
@@ -196,12 +129,50 @@ export default function RoadmapPage() {
     }
   };
 
+  const autoGenerateRoadmap = async (targetRole: string, skills: string[]) => {
+    try {
+      setGenerating(true);
+      const token = getToken();
+      
+      const response = await fetch("/api/generate-roadmap", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          targetRole,
+          timeline: "6-month",
+          dailyHours: undefined,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setRoadmap(data.roadmapText);
+        toast.success("6-month roadmap generated based on your tech stack!");
+      } else {
+        toast.error(data.error || "Failed to generate roadmap");
+      }
+    } catch (error) {
+      console.error("Error generating roadmap:", error);
+      toast.error("Failed to generate roadmap");
+    } finally {
+      setGenerating(false);
+      setLoading(false);
+    }
+  };
+
   const handleRegenerate = async () => {
     if (userSkills.length === 0) {
-      toast.error("Please add skills to your profile first");
+      toast.error("No skills found. Please add skills to your profile first.");
       return;
     }
-    await generateRoadmapAuto(targetRole || determineTargetRole(userSkills, preferredTrack), userSkills);
+    setRoadmap("");
+    const role = detectTargetRoleFromSkills(userSkills);
+    setTargetRole(role);
+    await autoGenerateRoadmap(role, userSkills);
   };
 
   const handleSave = async () => {
@@ -270,15 +241,11 @@ export default function RoadmapPage() {
       });
 
       if (response.ok) {
-        // Get the PDF blob
         const blob = await response.blob();
-        
-        // Create a download link
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         
-        // Get filename from Content-Disposition header or use default
         const contentDisposition = response.headers.get("Content-Disposition");
         let filename = "career-roadmap.pdf";
         if (contentDisposition) {
@@ -291,11 +258,8 @@ export default function RoadmapPage() {
         a.download = filename;
         document.body.appendChild(a);
         a.click();
-        
-        // Cleanup
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        
         toast.success("PDF downloaded successfully!");
       } else {
         const data = await response.json();
@@ -308,7 +272,6 @@ export default function RoadmapPage() {
   };
 
   const formatRoadmapText = (text: string) => {
-    // Split by lines and format
     const lines = text.split("\n");
     const elements: React.ReactElement[] = [];
     let currentList: string[] = [];
@@ -331,7 +294,6 @@ export default function RoadmapPage() {
     lines.forEach((line, index) => {
       const trimmedLine = line.trim();
 
-      // Check for headers
       if (trimmedLine.startsWith("# ")) {
         flushList();
         elements.push(
@@ -377,20 +339,18 @@ export default function RoadmapPage() {
       }
     });
 
-    // Flush any remaining list items
     flushList();
-
     return elements;
   };
 
-  if (authLoading || loading || autoGenerating) {
+  if (authLoading || loading) {
     return (
       <div
         className={`${gradientBackground} min-h-full text-white rounded-lg p-6 md:p-8 lg:p-10 flex items-center justify-center`}
       >
         <div className="text-center">
           <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
-          <p>{autoGenerating ? "Generating your 6-month roadmap based on your tech stack..." : "Loading..."}</p>
+          <p>Loading...</p>
         </div>
       </div>
     );
@@ -422,36 +382,56 @@ export default function RoadmapPage() {
             </h1>
           </div>
           <p className="text-lg text-slate-300">
-            AI-generated 6-month detailed roadmap tailored to your current tech stack
-            {userSkills.length > 0 && (
-              <span className="block mt-2 text-sm text-blue-300">
-                <strong>Your Tech Stack:</strong> {userSkills.slice(0, 6).join(", ")}
-                {userSkills.length > 6 && ` +${userSkills.length - 6} more`}
-                {targetRole && (
-                  <span className="block mt-1">
-                    <strong>Target Role:</strong> {targetRole}
-                  </span>
-                )}
-              </span>
-            )}
+            Your AI-generated 6-month roadmap based on your current tech stack
           </p>
         </motion.div>
 
-        {/* Display Roadmap or No Skills Message */}
-        {!roadmap ? (
+        {/* Loading/Generating State */}
+        {(loading || generating) ? (
           <motion.div
             variants={fadeIn}
             initial="hidden"
             animate="visible"
-            className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 sm:p-8 backdrop-blur-xl shadow-xl text-center"
+            className="rounded-2xl border border-white/10 bg-white/5 p-12 backdrop-blur-xl shadow-xl text-center"
           >
+            <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-blue-400" />
+            <h2
+              className={`${inter.className} mb-2 text-2xl font-semibold text-white`}
+            >
+              {generating ? "Generating Your 6-Month Roadmap..." : "Loading..."}
+            </h2>
+            {generating && userSkills.length > 0 && (
+              <div className="mt-4">
+                <p className="text-slate-400 mb-2">
+                  Creating a personalized roadmap based on your tech stack:
+                </p>
+                <p className="font-medium text-blue-300">
+                  {userSkills.slice(0, 5).join(", ")}
+                  {userSkills.length > 5 && ` +${userSkills.length - 5} more`}
+                </p>
+                {targetRole && (
+                  <p className="mt-2 text-sm text-slate-500">
+                    Target Role: {targetRole}
+                  </p>
+                )}
+              </div>
+            )}
+          </motion.div>
+        ) : !roadmap && userSkills.length === 0 ? (
+          <motion.div
+            variants={fadeIn}
+            initial="hidden"
+            animate="visible"
+            className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-8 backdrop-blur-xl shadow-xl text-center"
+          >
+            <Sparkles className="mx-auto mb-4 h-12 w-12 text-amber-400" />
             <h2
               className={`${inter.className} mb-4 text-2xl font-semibold text-white`}
             >
-              No Tech Stack Found
+              No Skills Found
             </h2>
             <p className="mb-6 text-slate-300">
-              To generate your personalized 6-month career roadmap, please add skills to your profile first.
+              Please add skills to your profile first to generate a personalized 6-month roadmap.
             </p>
             <Link
               href="/profile"
@@ -460,7 +440,7 @@ export default function RoadmapPage() {
               Go to Profile
             </Link>
           </motion.div>
-        ) : (
+        ) : roadmap ? (
           <>
             {/* Action Buttons */}
             <motion.div
@@ -499,13 +479,22 @@ export default function RoadmapPage() {
               </motion.button>
               <motion.button
                 onClick={handleRegenerate}
-                disabled={autoGenerating || userSkills.length === 0}
-                whileHover={{ scale: autoGenerating || userSkills.length === 0 ? 1 : 1.02 }}
-                whileTap={{ scale: autoGenerating || userSkills.length === 0 ? 1 : 0.98 }}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={generating || userSkills.length === 0}
+                whileHover={{ scale: generating || userSkills.length === 0 ? 1 : 1.02 }}
+                whileTap={{ scale: generating || userSkills.length === 0 ? 1 : 0.98 }}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:opacity-50"
               >
-                <RefreshCw className={`h-4 w-4 ${autoGenerating ? "animate-spin" : ""}`} />
-                {autoGenerating ? "Regenerating..." : "Regenerate"}
+                {generating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    Regenerate Roadmap
+                  </>
+                )}
               </motion.button>
               <motion.button
                 onClick={handleExportPDF}
@@ -532,7 +521,7 @@ export default function RoadmapPage() {
               </div>
             </motion.div>
           </>
-        )}
+        ) : null}
       </div>
     </motion.main>
   );

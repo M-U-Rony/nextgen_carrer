@@ -16,6 +16,8 @@
 # next.js
 /.next/
 /out/
+*.tmp.*
+*.temp
 
 # production
 /build
@@ -42,3 +44,9 @@ next-env.d.ts
 
 # uploads
 /public/uploads
+
+# Windows reserved names (should never be files)
+nul
+con
+prn
+aux

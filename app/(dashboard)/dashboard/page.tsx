@@ -490,7 +490,7 @@ const DashboardPage: FC = () => {
                 className={`${inter.className} mb-2 text-3xl font-bold sm:text-4xl md:text-5xl`}
               >
                 Welcome back,{" "}
-                {dashboardData?.user?.name || authUser?.name || "User"}! 👋
+                {dashboardData?.user?.name || authUser?.name || "User"}!
               </h1>
               <div className="flex items-center gap-2 text-lg text-slate-300">
                 <span className="inline-block min-w-[280px]">
@@ -522,48 +522,56 @@ const DashboardPage: FC = () => {
               value: stats.skillsCount,
               icon: Award,
               color: "from-blue-500 to-cyan-500",
+              href: "/profile",
             },
             {
               label: "Saved Courses",
               value: stats.savedCourses,
               icon: BookOpen,
               color: "from-purple-500 to-pink-500",
+              href: "/resources",
             },
             {
               label: "Saved Jobs",
               value: stats.savedJobs,
               icon: Briefcase,
               color: "from-emerald-500 to-teal-500",
+              href: "/jobs",
             },
             {
               label: "Missing Skills",
               value: stats.missingSkillsCount,
               icon: AlertCircle,
               color: "from-amber-500 to-orange-500",
+              href: "/skill-gaps",
             },
           ].map((stat, index) => {
             const Icon = stat.icon;
             return (
-              <motion.div
-                key={stat.label}
-                variants={cardVariants}
-                initial="hidden"
-                animate="visible"
-                custom={index}
-                whileHover={{ scale: 1.05, y: -4 }}
-                className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl shadow-xl transition"
-              >
-                <div className="mb-3 flex items-center justify-between">
-                  <Icon className={`h-6 w-6 text-white`} />
-                  <div
-                    className={`h-12 w-12 rounded-xl bg-gradient-to-r ${stat.color} opacity-20`}
-                  />
-                </div>
-                <div className="text-3xl font-bold text-white">
-                  {stat.value}
-                </div>
-                <div className="text-sm text-slate-400">{stat.label}</div>
-              </motion.div>
+              <Link key={stat.label} href={stat.href}>
+                <motion.div
+                  variants={cardVariants}
+                  initial="hidden"
+                  animate="visible"
+                  custom={index}
+                  whileHover={{ scale: 1.05, y: -4 }}
+                  className="cursor-pointer rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl shadow-xl transition hover:border-white/20 hover:bg-white/10"
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <Icon className={`h-6 w-6 text-white`} />
+                    <div
+                      className={`h-12 w-12 rounded-xl bg-gradient-to-r ${stat.color} opacity-20`}
+                    />
+                  </div>
+                  <div className="text-3xl font-bold text-white">
+                    {stat.value}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-400">{stat.label}</span>
+                    <ArrowRight className="h-4 w-4 text-slate-400" />
+                  </div>
+                </motion.div>
+              </Link>
             );
           })}
         </div>

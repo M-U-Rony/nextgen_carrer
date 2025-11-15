@@ -267,9 +267,45 @@ export default function CVBuilderPage() {
     }
   };
 
-  const handleExportPDF = () => {
-    toast.success("PDF export feature coming soon!");
-    // TODO: Implement PDF export
+  const handleExportPDF = async () => {
+    if (!userProfile && (!summary || bullets.length === 0)) {
+      toast.error("Please generate CV content first");
+      return;
+    }
+
+    try {
+      // Import PDF generator dynamically (client-side only)
+      const { generateCVPDF } = await import("@/lib/pdf-generator");
+
+      // Prepare CV data
+      const cvData = {
+        name: userProfile?.name || "Your Name",
+        email: userProfile?.email || "",
+        location: (userProfile as any)?.location || "",
+        phone: "",
+        linkedIn: "",
+        summary: summary || "Professional summary will appear here",
+        skills: userProfile?.skills || [],
+        workExperience: userProfile?.workExperience || [],
+        education: userProfile?.education || "",
+        projects: userProfile?.projects || [],
+        bullets: bullets.length > 0 ? bullets : undefined,
+      };
+
+      // Generate PDF
+      const doc = generateCVPDF(cvData);
+
+      // Generate filename
+      const date = new Date().toISOString().split("T")[0];
+      const fileName = `CV_${cvData.name.replace(/\s+/g, "_")}_${date}.pdf`;
+
+      // Save PDF
+      doc.save(fileName);
+      toast.success("CV exported as PDF successfully!");
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      toast.error("Failed to export PDF. Please try again.");
+    }
   };
 
   const addBullet = () => {
